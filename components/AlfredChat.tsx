@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Send, Mic, Sparkles } from 'lucide-react';
+import { X, Send, Mic, Sparkles, Check, Clock, MapPin, Star, ExternalLink } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
@@ -25,6 +25,40 @@ type ExtractedDateTime = {
   hasTime: boolean;
 };
 
+type TimeProposal = {
+  startTime: string;
+  endTime: string;
+  duration?: string;
+  label?: string;
+};
+
+type VenueProposal = {
+  name: string;
+  address?: string;
+  phone?: string;
+  website?: string;
+  rating?: string;
+  features?: string;
+};
+
+type Preferences = {
+  partyTheme?: string;
+  budget?: string;
+  numberOfGuests?: string;
+  ageGroup?: string;
+  specialRequirements?: string;
+  other?: string;
+};
+
+type Proposals = {
+  timeProposals?: TimeProposal[];
+  venueProposals?: VenueProposal[];
+  preferences?: Preferences;
+  hasTimeProposals: boolean;
+  hasVenueProposals: boolean;
+  hasPreferences: boolean;
+};
+
 /**
  * AlfredChat component - AI chat interface for interacting with Alfred
  */
@@ -40,6 +74,7 @@ export function AlfredChat({ onClose }: AlfredChatProps) {
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [extractedDateTime, setExtractedDateTime] = useState<ExtractedDateTime | null>(null);
+  const [proposals, setProposals] = useState<Proposals | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
@@ -152,6 +187,11 @@ export function AlfredChat({ onClose }: AlfredChatProps) {
       if (data.extractedDateTime && (data.extractedDateTime.hasDate || data.extractedDateTime.hasTime)) {
         setExtractedDateTime(data.extractedDateTime);
       }
+      
+      // Update proposals if found
+      if (data.proposals) {
+        setProposals(data.proposals);
+      }
     } catch (error) {
       console.error('Error getting AI response:', error);
       // Fallback response on error
@@ -181,78 +221,216 @@ export function AlfredChat({ onClose }: AlfredChatProps) {
     "Find a gift for my partner"
   ];
 
+  const handleApproveTime = async (startTime: string, endTime: string) => {
+    const formatTime = (time24: string) => {
+      if (!time24) return '';
+      const [hours, minutes] = time24.split(':');
+      const hour = parseInt(hours);
+      const ampm = hour >= 12 ? 'PM' : 'AM';
+      const hour12 = hour % 12 || 12;
+      return `${hour12}:${minutes} ${ampm}`;
+    };
+    
+    const approvalText = `I approve the time: ${formatTime(startTime)} - ${formatTime(endTime)}`;
+    
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      sender: 'user',
+      text: approvalText,
+      timestamp: new Date()
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setIsTyping(true);
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: [...messages, userMessage].map(msg => ({
+            sender: msg.sender,
+            text: msg.text,
+          })),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get response from AI');
+      }
+
+      const data = await response.json();
+      const alfredMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        sender: 'alfred',
+        text: data.message,
+        timestamp: new Date()
+      };
+      
+      setMessages(prev => [...prev, alfredMessage]);
+      
+      if (data.extractedDateTime && (data.extractedDateTime.hasDate || data.extractedDateTime.hasTime)) {
+        setExtractedDateTime(data.extractedDateTime);
+      }
+      
+      if (data.proposals) {
+        setProposals(data.proposals);
+      }
+    } catch (error) {
+      console.error('Error getting AI response:', error);
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
+  const handleApproveVenue = async (venueName: string) => {
+    const approvalText = `I approve the venue: ${venueName}`;
+    
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      sender: 'user',
+      text: approvalText,
+      timestamp: new Date()
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setIsTyping(true);
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: [...messages, userMessage].map(msg => ({
+            sender: msg.sender,
+            text: msg.text,
+          })),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get response from AI');
+      }
+
+      const data = await response.json();
+      const alfredMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        sender: 'alfred',
+        text: data.message,
+        timestamp: new Date()
+      };
+      
+      setMessages(prev => [...prev, alfredMessage]);
+      
+      if (data.extractedDateTime && (data.extractedDateTime.hasDate || data.extractedDateTime.hasTime)) {
+        setExtractedDateTime(data.extractedDateTime);
+      }
+      
+      if (data.proposals) {
+        setProposals(data.proposals);
+      }
+    } catch (error) {
+      console.error('Error getting AI response:', error);
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <Card className="w-full max-w-2xl h-[600px] flex flex-col">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4 animate-in fade-in duration-200">
+      <Card className="w-full max-w-5xl h-[90vh] max-h-[900px] flex flex-col shadow-2xl border-0 overflow-hidden bg-white">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-t-lg">
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
-              <Sparkles className="h-5 w-5" />
+        <div className="flex items-center justify-between p-5 sm:p-6 border-b bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-lg ring-2 ring-white/30">
+              <Sparkles className="h-6 w-6" />
             </div>
             <div>
-              <h2 className="text-lg">Alfred</h2>
-              <p className="text-xs opacity-90">Your AI Life Assistant</p>
+              <h2 className="text-xl font-bold">Alfred</h2>
+              <p className="text-sm opacity-90">Your AI Life Assistant</p>
             </div>
           </div>
-          <Button variant="ghost" size="sm" onClick={onClose} className="text-white hover:bg-white/20">
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={onClose} 
+            className="text-white hover:bg-white/20 rounded-full w-10 h-10"
+          >
             <X className="h-5 w-5" />
           </Button>
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {messages.map(message => (
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 bg-gradient-to-b from-gray-50 to-white">
+          {messages.map((message, index) => (
             <div
               key={message.id}
-              className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+              className={`flex gap-3 ${message.sender === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}
+              style={{ animationDelay: `${index * 50}ms` }}
             >
+              {message.sender === 'alfred' && (
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center flex-shrink-0 shadow-md">
+                  <Sparkles className="h-4 w-4 text-white" />
+                </div>
+              )}
               <div
-                className={`max-w-[80%] rounded-lg p-3 ${
+                className={`max-w-[75%] sm:max-w-[70%] rounded-2xl p-4 shadow-md ${
                   message.sender === 'user'
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-gray-100 text-gray-900'
+                    ? 'bg-gradient-to-br from-indigo-600 to-indigo-700 text-white rounded-tr-sm'
+                    : 'bg-white text-gray-900 border border-gray-200 rounded-tl-sm'
                 }`}
               >
                 {message.sender === 'alfred' ? (
-                  <div className="prose prose-sm max-w-none">
+                  <div className="prose prose-sm max-w-none prose-headings:font-bold prose-p:text-gray-800 prose-strong:text-gray-900">
                     <ReactMarkdown
                       components={{
-                        p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-                        ul: ({ children }) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
-                        ol: ({ children }) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
+                        p: ({ children }) => <p className="mb-3 last:mb-0 text-[15px] leading-relaxed">{children}</p>,
+                        ul: ({ children }) => <ul className="list-disc list-inside mb-3 space-y-2 text-[15px]">{children}</ul>,
+                        ol: ({ children }) => <ol className="list-decimal list-inside mb-3 space-y-2 text-[15px]">{children}</ol>,
                         li: ({ children }) => <li className="ml-2">{children}</li>,
-                        strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                        strong: ({ children }) => <strong className="font-semibold text-gray-900">{children}</strong>,
                         em: ({ children }) => <em className="italic">{children}</em>,
-                        code: ({ children }) => <code className="bg-gray-200 px-1 py-0.5 rounded text-xs font-mono">{children}</code>,
-                        h1: ({ children }) => <h1 className="text-lg font-bold mb-2 mt-3 first:mt-0">{children}</h1>,
-                        h2: ({ children }) => <h2 className="text-base font-bold mb-2 mt-3 first:mt-0">{children}</h2>,
-                        h3: ({ children }) => <h3 className="text-sm font-bold mb-1 mt-2 first:mt-0">{children}</h3>,
+                        code: ({ children }) => <code className="bg-gray-100 px-2 py-1 rounded text-sm font-mono text-indigo-700">{children}</code>,
+                        h1: ({ children }) => <h1 className="text-xl font-bold mb-3 mt-4 first:mt-0 text-gray-900">{children}</h1>,
+                        h2: ({ children }) => <h2 className="text-lg font-bold mb-2 mt-3 first:mt-0 text-gray-900">{children}</h2>,
+                        h3: ({ children }) => <h3 className="text-base font-bold mb-2 mt-2 first:mt-0 text-gray-900">{children}</h3>,
                       }}
                     >
                       {message.text}
                     </ReactMarkdown>
                   </div>
                 ) : (
-                  <p className="whitespace-pre-line text-sm">{message.text}</p>
+                  <p className="whitespace-pre-line text-[15px] leading-relaxed">{message.text}</p>
                 )}
-                <p className="text-xs opacity-70 mt-1">
+                <p className={`text-xs mt-2 ${message.sender === 'user' ? 'text-indigo-100' : 'text-gray-500'}`}>
                   {message.timestamp.toLocaleTimeString('en-US', {
                     hour: 'numeric',
                     minute: '2-digit'
                   })}
                 </p>
               </div>
+              {message.sender === 'user' && (
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-gray-400 to-gray-600 flex items-center justify-center flex-shrink-0 shadow-md">
+                  <span className="text-white text-xs font-semibold">You</span>
+                </div>
+              )}
             </div>
           ))}
 
           {isTyping && (
-            <div className="flex justify-start">
-              <div className="bg-gray-100 rounded-lg p-3">
-                <div className="flex gap-1">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+            <div className="flex justify-start gap-3 animate-in fade-in">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center flex-shrink-0 shadow-md">
+                <Sparkles className="h-4 w-4 text-white" />
+              </div>
+              <div className="bg-white rounded-2xl rounded-tl-sm p-4 shadow-md border border-gray-200">
+                <div className="flex gap-1.5">
+                  <div className="w-2.5 h-2.5 bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <div className="w-2.5 h-2.5 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <div className="w-2.5 h-2.5 bg-pink-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                 </div>
               </div>
             </div>
@@ -263,46 +441,219 @@ export function AlfredChat({ onClose }: AlfredChatProps) {
 
         {/* Extracted Date/Time Display */}
         {extractedDateTime && (extractedDateTime.hasDate || extractedDateTime.hasTime) && (
-          <div className="px-4 pb-2 border-t bg-indigo-50">
-            <p className="text-xs font-semibold text-indigo-900 mb-1 mt-2">📅 Extracted Information:</p>
-            <div className="flex gap-3 text-xs text-indigo-700">
+          <div className="px-4 sm:px-6 py-4 border-t bg-gradient-to-r from-indigo-50 to-purple-50">
+            <div className="flex items-center gap-2 mb-3">
+              <Clock className="h-4 w-4 text-indigo-600" />
+              <p className="text-sm font-semibold text-indigo-900">Extracted Information</p>
+            </div>
+            <div className="flex flex-wrap gap-3">
               {extractedDateTime.hasDate && extractedDateTime.date && (
-                <span>Date: {new Date(extractedDateTime.date).toLocaleDateString('en-US', { 
-                  weekday: 'short', 
-                  year: 'numeric', 
-                  month: 'short', 
-                  day: 'numeric' 
-                })}</span>
+                <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg shadow-sm border border-indigo-200">
+                  <span className="text-xs font-medium text-indigo-700">📅</span>
+                  <span className="text-sm text-indigo-900 font-medium">
+                    {new Date(extractedDateTime.date).toLocaleDateString('en-US', { 
+                      weekday: 'long', 
+                      year: 'numeric', 
+                      month: 'long', 
+                      day: 'numeric' 
+                    })}
+                  </span>
+                </div>
               )}
               {extractedDateTime.hasTime && extractedDateTime.time && (
-                <span>Time: {extractedDateTime.time}</span>
-              )}
-              {extractedDateTime.datetime && (
-                <span className="text-indigo-600 font-medium">
-                  {new Date(extractedDateTime.datetime).toLocaleString('en-US', {
-                    weekday: 'short',
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric',
-                    hour: 'numeric',
-                    minute: '2-digit'
-                  })}
-                </span>
+                <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg shadow-sm border border-indigo-200">
+                  <span className="text-xs font-medium text-indigo-700">⏰</span>
+                  <span className="text-sm text-indigo-900 font-medium">{extractedDateTime.time}</span>
+                </div>
               )}
             </div>
           </div>
         )}
 
+        {/* Proposals Display */}
+        {proposals && (proposals.hasTimeProposals || proposals.hasVenueProposals || proposals.hasPreferences) && (
+          <div className="px-4 sm:px-6 py-4 border-t bg-gradient-to-r from-emerald-50 via-green-50 to-teal-50 max-h-[400px] overflow-y-auto">
+            <div className="flex items-center gap-2 mb-4">
+              <Sparkles className="h-5 w-5 text-emerald-600" />
+              <p className="text-base font-bold text-emerald-900">Extracted Information</p>
+            </div>
+            
+            {/* Time Proposals List */}
+            {proposals.hasTimeProposals && proposals.timeProposals && proposals.timeProposals.length > 0 && (
+              <div className="mb-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Clock className="h-5 w-5 text-emerald-600" />
+                  <p className="text-sm font-semibold text-emerald-900">Time Options ({proposals.timeProposals.length})</p>
+                </div>
+                <div className="space-y-3">
+                  {proposals.timeProposals.map((timeOption, index) => {
+                    const formatTime = (time24: string) => {
+                      if (!time24) return '';
+                      const [hours, minutes] = time24.split(':');
+                      const hour = parseInt(hours);
+                      const ampm = hour >= 12 ? 'PM' : 'AM';
+                      const hour12 = hour % 12 || 12;
+                      return `${hour12}:${minutes} ${ampm}`;
+                    };
+                    
+                    return (
+                      <div key={index} className="bg-white rounded-xl p-4 shadow-lg border-2 border-emerald-200 hover:border-emerald-300 transition-all">
+                        <div className="flex items-center justify-between gap-4 flex-wrap">
+                          <div className="flex items-center gap-3">
+                            <div className="text-2xl font-bold text-emerald-700">
+                              {formatTime(timeOption.startTime)} - {formatTime(timeOption.endTime)}
+                            </div>
+                            {timeOption.duration && (
+                              <span className="text-sm text-emerald-600 bg-emerald-100 px-3 py-1 rounded-full font-medium">
+                                {timeOption.duration}
+                              </span>
+                            )}
+                            {timeOption.label && (
+                              <span className="text-sm text-gray-600 bg-gray-100 px-3 py-1 rounded-full">
+                                {timeOption.label}
+                              </span>
+                            )}
+                          </div>
+                          <Button
+                            onClick={() => handleApproveTime(timeOption.startTime, timeOption.endTime)}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-lg font-semibold shadow-md hover:shadow-lg transition-all flex items-center gap-2"
+                          >
+                            <Check className="h-4 w-4" />
+                            Approve
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            
+            {/* Venue Proposals List */}
+            {proposals.hasVenueProposals && proposals.venueProposals && proposals.venueProposals.length > 0 && (
+              <div className="mb-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <MapPin className="h-5 w-5 text-emerald-600" />
+                  <p className="text-sm font-semibold text-emerald-900">Venue Options ({proposals.venueProposals.length})</p>
+                </div>
+                <div className="space-y-3">
+                  {proposals.venueProposals.map((venue, index) => (
+                    <div key={index} className="bg-white rounded-xl p-5 shadow-lg border-2 border-emerald-200 hover:border-emerald-400 hover:shadow-xl transition-all">
+                      <div className="flex items-start justify-between gap-4 flex-wrap">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start gap-3 mb-2">
+                            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center flex-shrink-0">
+                              <MapPin className="h-5 w-5 text-white" />
+                            </div>
+                            <div className="flex-1">
+                              <h3 className="text-lg font-bold text-gray-900 mb-1">{venue.name}</h3>
+                              {venue.rating && (
+                                <div className="flex items-center gap-1 mb-2">
+                                  <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                                  <span className="text-sm font-medium text-gray-700">{venue.rating}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          {venue.address && (
+                            <p className="text-sm text-gray-600 mb-1 flex items-center gap-1">
+                              <MapPin className="h-3 w-3" />
+                              {venue.address}
+                            </p>
+                          )}
+                          {venue.phone && (
+                            <p className="text-sm text-gray-600 mb-2">{venue.phone}</p>
+                          )}
+                          {venue.features && (
+                            <p className="text-sm text-gray-700 mt-2 bg-gray-50 p-2 rounded-lg">{venue.features}</p>
+                          )}
+                          {venue.website && (
+                            <a 
+                              href={venue.website} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-sm text-emerald-600 hover:text-emerald-700 flex items-center gap-1 mt-2"
+                            >
+                              Visit website <ExternalLink className="h-3 w-3" />
+                            </a>
+                          )}
+                        </div>
+                        <Button
+                          onClick={() => handleApproveVenue(venue.name)}
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-lg font-semibold shadow-md hover:shadow-lg transition-all flex items-center gap-2 flex-shrink-0"
+                        >
+                          <Check className="h-4 w-4" />
+                          Approve
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Preferences */}
+            {proposals.hasPreferences && proposals.preferences && (
+              <div className="mt-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Sparkles className="h-5 w-5 text-purple-600" />
+                  <p className="text-sm font-semibold text-purple-900">Preferences</p>
+                </div>
+                <div className="bg-white rounded-xl p-4 shadow-lg border-2 border-purple-200">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {proposals.preferences.partyTheme && (
+                      <div className="flex items-start gap-2">
+                        <span className="text-purple-600 font-medium">Theme:</span>
+                        <span className="text-gray-700">{proposals.preferences.partyTheme}</span>
+                      </div>
+                    )}
+                    {proposals.preferences.budget && (
+                      <div className="flex items-start gap-2">
+                        <span className="text-purple-600 font-medium">Budget:</span>
+                        <span className="text-gray-700">{proposals.preferences.budget}</span>
+                      </div>
+                    )}
+                    {proposals.preferences.numberOfGuests && (
+                      <div className="flex items-start gap-2">
+                        <span className="text-purple-600 font-medium">Guests:</span>
+                        <span className="text-gray-700">{proposals.preferences.numberOfGuests}</span>
+                      </div>
+                    )}
+                    {proposals.preferences.ageGroup && (
+                      <div className="flex items-start gap-2">
+                        <span className="text-purple-600 font-medium">Age Group:</span>
+                        <span className="text-gray-700">{proposals.preferences.ageGroup}</span>
+                      </div>
+                    )}
+                    {proposals.preferences.specialRequirements && (
+                      <div className="col-span-full flex items-start gap-2">
+                        <span className="text-purple-600 font-medium">Special Requirements:</span>
+                        <span className="text-gray-700">{proposals.preferences.specialRequirements}</span>
+                      </div>
+                    )}
+                    {proposals.preferences.other && (
+                      <div className="col-span-full flex items-start gap-2">
+                        <span className="text-purple-600 font-medium">Other:</span>
+                        <span className="text-gray-700">{proposals.preferences.other}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Quick Prompts */}
         {messages.length === 1 && (
-          <div className="px-4 pb-2">
-            <p className="text-xs text-gray-600 mb-2">Quick prompts:</p>
+          <div className="px-4 sm:px-6 py-3 border-t bg-gradient-to-r from-indigo-50 to-purple-50">
+            <p className="text-xs font-semibold text-gray-700 mb-3">💡 Quick prompts:</p>
             <div className="flex gap-2 flex-wrap">
               {quickPrompts.map((prompt, idx) => (
                 <button
                   key={idx}
                   onClick={() => setInputValue(prompt)}
-                  className="text-xs px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-full hover:bg-indigo-100 transition-colors"
+                  className="text-sm px-4 py-2 bg-white text-indigo-700 rounded-full hover:bg-indigo-100 hover:text-indigo-800 transition-all shadow-sm hover:shadow-md border border-indigo-200 font-medium"
                 >
                   {prompt}
                 </button>
@@ -312,31 +663,59 @@ export function AlfredChat({ onClose }: AlfredChatProps) {
         )}
 
         {/* Input */}
-        <div className="p-4 border-t bg-gray-50 rounded-b-lg">
-          <div className="flex gap-2">
+        <div className="p-4 sm:p-6 border-t bg-white">
+          <div className="flex gap-3 items-end">
             <Button
               variant="outline"
               size="icon"
-              className={`flex-shrink-0 ${isRecording ? 'bg-red-100 border-red-300 animate-pulse' : ''}`}
+              className={`flex-shrink-0 w-12 h-12 rounded-full transition-all ${
+                isRecording 
+                  ? 'bg-red-100 border-red-400 text-red-600 animate-pulse shadow-lg' 
+                  : 'hover:bg-gray-100 border-gray-300'
+              }`}
               title={isRecording ? 'Stop recording' : 'Start voice input'}
               onClick={handleVoiceInput}
             >
-              <Mic className={`h-4 w-4 ${isRecording ? 'text-red-600' : ''}`} />
+              <Mic className={`h-5 w-5 ${isRecording ? 'text-red-600' : ''}`} />
             </Button>
-            <input
-              type="text"
-              value={inputValue}
-              onChange={e => setInputValue(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="Type your message or use voice..."
-              className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            />
+            <div className="flex-1 relative">
+              <textarea
+                value={inputValue}
+                onChange={e => setInputValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSend();
+                  }
+                }}
+                placeholder="Type your message or use voice..."
+                rows={1}
+                className="w-full px-4 py-3 pr-12 border-2 border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none text-[15px] min-h-[52px] max-h-32 overflow-y-auto"
+                style={{ 
+                  height: 'auto',
+                  minHeight: '52px'
+                }}
+                onInput={(e) => {
+                  const target = e.target as HTMLTextAreaElement;
+                  target.style.height = 'auto';
+                  target.style.height = `${Math.min(target.scrollHeight, 128)}px`;
+                }}
+              />
+              {inputValue && (
+                <button
+                  onClick={() => setInputValue('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
             <Button
               onClick={handleSend}
               disabled={!inputValue.trim()}
-              className="flex-shrink-0 bg-indigo-600 hover:bg-indigo-700"
+              className="flex-shrink-0 w-12 h-12 rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Send className="h-4 w-4" />
+              <Send className="h-5 w-5" />
             </Button>
           </div>
         </div>
