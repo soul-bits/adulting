@@ -40,7 +40,7 @@ export function AlfredChat({ onClose }: AlfredChatProps) {
     scrollToBottom();
   }, [messages]);
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!inputValue.trim()) return;
 
     const userMessage: Message = {
@@ -54,33 +54,45 @@ export function AlfredChat({ onClose }: AlfredChatProps) {
     setInputValue('');
     setIsTyping(true);
 
-    // Simulate Alfred's response
-    setTimeout(() => {
-      const alfredResponse = getAlfredResponse(inputValue);
+    try {
+      // Call the OpenAI API
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: [...messages, userMessage].map(msg => ({
+            sender: msg.sender,
+            text: msg.text,
+          })),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get response from AI');
+      }
+
+      const data = await response.json();
       const alfredMessage: Message = {
         id: (Date.now() + 1).toString(),
         sender: 'alfred',
-        text: alfredResponse,
+        text: data.message,
         timestamp: new Date()
       };
       setMessages(prev => [...prev, alfredMessage]);
+    } catch (error) {
+      console.error('Error getting AI response:', error);
+      // Fallback response on error
+      const alfredMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        sender: 'alfred',
+        text: "I'm sorry, I'm having trouble connecting right now. Please make sure your OPENAI_API_KEY is set in your .env.local file. You can still use me for basic help!",
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, alfredMessage]);
+    } finally {
       setIsTyping(false);
-    }, 1500);
-  };
-
-  const getAlfredResponse = (userInput: string): string => {
-    const input = userInput.toLowerCase();
-
-    if (input.includes('birthday') || input.includes('party')) {
-      return "Great! I'd be happy to help plan a birthday party. Could you tell me:\n\n1. When is the party?\n2. How many guests?\n3. What's the age group?\n4. Any specific theme or preferences?\n\nI'll start preparing gift ideas, venue suggestions, and everything else you'll need!";
-    } else if (input.includes('meeting') || input.includes('conference')) {
-      return "I can help you prepare for your meeting! Let me know:\n\n1. Date and time\n2. Number of attendees\n3. Location preference\n4. Any materials you need prepared\n\nI'll take care of booking, prep work, and reminders.";
-    } else if (input.includes('dinner') || input.includes('restaurant')) {
-      return "Planning a dinner out? Perfect! Tell me:\n\n1. Date and time\n2. Number of people\n3. Cuisine preference\n4. Budget range\n\nI'll find the best restaurants and make reservations for you.";
-    } else if (input.includes('gift') || input.includes('present')) {
-      return "I love helping with gift selection! Share some details:\n\n1. Who is it for?\n2. What's the occasion?\n3. Budget range\n4. Their interests or hobbies\n\nI'll curate personalized options for you to choose from.";
-    } else {
-      return "I'm here to help! I can assist with:\n\n• Planning events (birthdays, meetings, dinners)\n• Booking venues and restaurants\n• Shopping for gifts and party supplies\n• Sending invitations and managing RSVPs\n• Preparing for conferences and trips\n\nWhat would you like me to help with?";
     }
   };
 
