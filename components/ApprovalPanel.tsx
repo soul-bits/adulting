@@ -1,6 +1,7 @@
 'use client';
 
-import { ArrowLeft, CheckCircle2, X, Sparkles } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ArrowLeft, CheckCircle2, X, Sparkles, Loader2, Search } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
@@ -17,6 +18,11 @@ type ApprovalPanelProps = {
  * ApprovalPanel component - displays all tasks that need approval
  */
 export function ApprovalPanel({ events, onBack, onTaskUpdate }: ApprovalPanelProps) {
+  const [loadingRecommendations, setLoadingRecommendations] = useState<Record<string, boolean>>({});
+  const [taskSuggestions, setTaskSuggestions] = useState<Record<string, Task['suggestions']>>({});
+  const [taskBrowserUseUrls, setTaskBrowserUseUrls] = useState<Record<string, string>>({});
+  const [autoFetchedTasks, setAutoFetchedTasks] = useState<Set<string>>(new Set());
+  
   const pendingApprovals = events.flatMap(event =>
     event.tasks
       .filter(task => task.status === 'suggested' && task.needsApproval)
@@ -24,9 +30,83 @@ export function ApprovalPanel({ events, onBack, onTaskUpdate }: ApprovalPanelPro
         ...task,
         eventTitle: event.title,
         eventDate: event.date,
-        eventId: event.id
+        eventId: event.id,
+        // Use stored suggestions if available, otherwise use task suggestions
+        suggestions: taskSuggestions[task.id] || task.suggestions || [],
+        // Use stored browser-use URL if available
+        browserUseUrl: taskBrowserUseUrls[task.id] || task.browserUseUrl
       }))
   );
+
+  const handleGetRecommendations = async (task: Task & { eventId: string }) => {
+    // Prevent duplicate calls
+    if (loadingRecommendations[task.id]) {
+      console.log(`[ApprovalPanel] ⚠️  Already fetching recommendations for task ${task.id}`);
+      return;
+    }
+
+    setLoadingRecommendations(prev => ({ ...prev, [task.id]: true }));
+    
+    try {
+      const response = await fetch('/api/tasks/recommendations', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ task }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Update browser-use URL immediately if available (even before suggestions are ready)
+        if (data.browserUseUrl) {
+          setTaskBrowserUseUrls(prev => ({
+            ...prev,
+            [task.id]: data.browserUseUrl,
+          }));
+          console.log(`[ApprovalPanel] ✅ Got browser-use URL for task ${task.id}: ${data.browserUseUrl}`);
+        }
+
+        // Update suggestions if available
+        if (data.suggestions && data.suggestions.length > 0) {
+          setTaskSuggestions(prev => ({
+            ...prev,
+            [task.id]: data.suggestions,
+          }));
+          console.log(`[ApprovalPanel] ✅ Got ${data.suggestions.length} recommendation(s) for task ${task.id}`);
+        } else {
+          console.log(`[ApprovalPanel] ⏳ Browser-use session started, recommendations will be available soon`);
+        }
+      } else {
+        console.error('[ApprovalPanel] Failed to get recommendations:', data.message);
+        // Don't show blocking dialog - just log the error
+        if (data.error === 'Task is already being processed') {
+          console.log('[ApprovalPanel] Task already being processed, reusing existing session...');
+        }
+      }
+    } catch (error) {
+      console.error('[ApprovalPanel] Error getting recommendations:', error);
+    } finally {
+      setLoadingRecommendations(prev => ({ ...prev, [task.id]: false }));
+    }
+  };
+
+  // Automatically fetch recommendations for all pending approval tasks
+  useEffect(() => {
+    const tasksToFetch = pendingApprovals.filter(task => !autoFetchedTasks.has(task.id) && !loadingRecommendations[task.id]);
+    
+    if (tasksToFetch.length > 0) {
+      console.log(`[ApprovalPanel] 🤖 Auto-fetching recommendations for ${tasksToFetch.length} task(s) pending approval`);
+      
+      // Fetch recommendations for each task
+      tasksToFetch.forEach(task => {
+        console.log(`[ApprovalPanel] Auto-fetching recommendations for task: ${task.id}`);
+        handleGetRecommendations(task);
+        setAutoFetchedTasks(prev => new Set([...prev, task.id]));
+      });
+    }
+  }, [pendingApprovals, autoFetchedTasks, loadingRecommendations, handleGetRecommendations]);
 
   const handleApproveAll = () => {
     pendingApprovals.forEach(task => {
@@ -99,16 +179,18 @@ export function ApprovalPanel({ events, onBack, onTaskUpdate }: ApprovalPanelPro
                     </div>
                     <h2 className="text-xl mb-1">{task.title}</h2>
                     <p className="text-gray-600">{task.description}</p>
-                    {task.browserUseUrl && (
-                      <div className="mt-2">
-                        <a
-                          href={task.browserUseUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm text-blue-600 hover:text-blue-800 underline flex items-center gap-1"
+                    
+                    {/* Browser-Use Link Section */}
+                    {(task.browserUseUrl || (task as any).tempBrowserUseUrl) && (
+                      <div className="mt-3">
+                        <Button
+                          size="sm"
+                          className="bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white gap-2"
+                          onClick={() => window.open(task.browserUseUrl || (task as any).tempBrowserUseUrl, '_blank', 'noopener,noreferrer')}
                         >
-                          🔗 View browser automation session
-                        </a>
+                          <span className="text-lg">🔗</span>
+                          Watch Live Automation
+                        </Button>
                       </div>
                     )}
                   </div>
@@ -156,6 +238,50 @@ export function ApprovalPanel({ events, onBack, onTaskUpdate }: ApprovalPanelPro
                   </div>
                 )}
 
+                {/* Recommendations Section */}
+                {task.suggestions && task.suggestions.length > 0 && (
+                  <div className="mb-4">
+                    <p className="text-sm font-medium mb-3">Recommendations:</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {task.suggestions.map(suggestion => (
+                        <div
+                          key={suggestion.id}
+                          className="border rounded-lg p-4 bg-gradient-to-br from-indigo-50 to-purple-50"
+                        >
+                          {suggestion.image && (
+                            <Image
+                              src={suggestion.image}
+                              alt={suggestion.title}
+                              width={400}
+                              height={160}
+                              className="w-full h-40 object-cover rounded-lg mb-3"
+                            />
+                          )}
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="flex-1">
+                              <h3 className="mb-1 font-medium">{suggestion.title}</h3>
+                              <p className="text-sm text-gray-600">{suggestion.description}</p>
+                            </div>
+                            {suggestion.price && (
+                              <span className="text-lg text-indigo-600 ml-2">{suggestion.price}</span>
+                            )}
+                          </div>
+                          {suggestion.link && (
+                            <Button 
+                              size="sm" 
+                              variant="outline" 
+                              className="w-full"
+                              onClick={() => window.open(suggestion.link, '_blank', 'noopener,noreferrer')}
+                            >
+                              View on Website
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Action Buttons */}
                 <div className="flex gap-3 pt-4 border-t">
                   <Button
@@ -168,9 +294,21 @@ export function ApprovalPanel({ events, onBack, onTaskUpdate }: ApprovalPanelPro
                   </Button>
                   <Button
                     variant="outline"
+                    onClick={() => handleGetRecommendations(task)}
+                    disabled={loadingRecommendations[task.id]}
                     className="flex-1"
                   >
-                    Modify
+                    {loadingRecommendations[task.id] ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Searching...
+                      </>
+                    ) : (
+                      <>
+                        <Search className="mr-2 h-4 w-4" />
+                        Get Recommendations
+                      </>
+                    )}
                   </Button>
                   <Button
                     onClick={() => {

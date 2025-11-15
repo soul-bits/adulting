@@ -152,8 +152,18 @@
         }
       ],
       "processedAt": "2025-11-15T22:15:27.261Z",
-      "lastUpdated": "2025-11-15T22:15:33.912Z"
+      "lastUpdated": "2025-11-15T22:34:00.171Z",
+      "birthdayAgentTask": {
+        "id": "task-birthday-dress-331nbddr9lbou6j4a9j9u18fmh-1763246036747",
+        "eventId": "331nbddr9lbou6j4a9j9u18fmh",
+        "category": "shopping",
+        "title": "Order dress for niece",
+        "description": "Order a girls dress for niece from Amazon for the birthday event.\n\n❌ Error: TooManyRequestsError\nStatus code: 429\nBody: {\n  \"detail\": \"Too many concurrent active sessions. Please wait for one to finish, kill one, or upgrade your plan.\"\n}",
+        "status": "issue",
+        "needsApproval": true,
+        "suggestions": []
+      }
     }
   },
-  "lastUpdated": "2025-11-15T22:15:33.912Z"
+  "lastUpdated": "2025-11-15T22:34:00.171Z"
 }

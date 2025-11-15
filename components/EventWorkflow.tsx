@@ -1,6 +1,7 @@
 'use client';
 
-import { ArrowLeft, MapPin, Users, Calendar, Sparkles, ShoppingCart, Mail, Package, CheckCircle2, Clock, AlertCircle, Loader2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ArrowLeft, MapPin, Users, Calendar, Sparkles, ShoppingCart, Mail, Package, CheckCircle2, Clock, AlertCircle, Loader2, Search } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
@@ -18,6 +19,83 @@ type EventWorkflowProps = {
  * EventWorkflow component - displays detailed view of an event with all tasks
  */
 export function EventWorkflow({ event, onBack, onTaskUpdate, onChatOpen }: EventWorkflowProps) {
+  const [loadingRecommendations, setLoadingRecommendations] = useState<Record<string, boolean>>({});
+  const [taskSuggestions, setTaskSuggestions] = useState<Record<string, Task['suggestions']>>({});
+  const [taskBrowserUseUrls, setTaskBrowserUseUrls] = useState<Record<string, string>>({});
+  const [autoFetchedTasks, setAutoFetchedTasks] = useState<Set<string>>(new Set());
+
+  const handleGetRecommendations = async (task: Task) => {
+    // Prevent duplicate calls
+    if (loadingRecommendations[task.id]) {
+      console.log(`[EventWorkflow] ⚠️  Already fetching recommendations for task ${task.id}`);
+      return;
+    }
+
+    setLoadingRecommendations(prev => ({ ...prev, [task.id]: true }));
+    
+    try {
+      const response = await fetch('/api/tasks/recommendations', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ task }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Update browser-use URL immediately if available (even before suggestions are ready)
+        if (data.browserUseUrl) {
+          setTaskBrowserUseUrls(prev => ({
+            ...prev,
+            [task.id]: data.browserUseUrl,
+          }));
+          console.log(`[EventWorkflow] ✅ Got browser-use URL for task ${task.id}: ${data.browserUseUrl}`);
+        }
+
+        // Update suggestions if available
+        if (data.suggestions && data.suggestions.length > 0) {
+          setTaskSuggestions(prev => ({
+            ...prev,
+            [task.id]: data.suggestions,
+          }));
+          console.log(`[EventWorkflow] ✅ Got ${data.suggestions.length} recommendation(s) for task ${task.id}`);
+        } else {
+          console.log(`[EventWorkflow] ⏳ Browser-use session started, recommendations will be available soon`);
+        }
+      } else {
+        console.error('[EventWorkflow] Failed to get recommendations:', data.message);
+        // Don't show blocking dialog - just log the error
+        if (data.error === 'Task is already being processed') {
+          console.log('[EventWorkflow] Task already being processed, reusing existing session...');
+        }
+      }
+    } catch (error) {
+      console.error('[EventWorkflow] Error getting recommendations:', error);
+    } finally {
+      setLoadingRecommendations(prev => ({ ...prev, [task.id]: false }));
+    }
+  };
+
+  // Automatically fetch recommendations for all suggested tasks
+  useEffect(() => {
+    const suggestedTasks = event.tasks.filter(task => task.status === 'suggested' && !autoFetchedTasks.has(task.id));
+    
+    if (suggestedTasks.length > 0) {
+      console.log(`[EventWorkflow] 🤖 Auto-fetching recommendations for ${suggestedTasks.length} suggested task(s)`);
+      
+      // Fetch recommendations for each suggested task
+      suggestedTasks.forEach(task => {
+        if (!loadingRecommendations[task.id]) {
+          console.log(`[EventWorkflow] Auto-fetching recommendations for task: ${task.id}`);
+          handleGetRecommendations(task);
+          setAutoFetchedTasks(prev => new Set([...prev, task.id]));
+        }
+      });
+    }
+  }, [event.tasks, autoFetchedTasks, loadingRecommendations, handleGetRecommendations]);
+
   const getCategoryIcon = (category: Task['category']) => {
     switch (category) {
       case 'shopping':
@@ -255,28 +333,41 @@ export function EventWorkflow({ event, onBack, onTaskUpdate, onChatOpen }: Event
                           </Badge>
                         </div>
                         <p className="text-sm text-gray-600">{task.description}</p>
-                        {(task.status === 'executing' || task.status === 'completed' || task.status === 'issue') && task.browserUseUrl && (
-                          <div className="mt-2">
-                            <a
-                              href={task.browserUseUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-sm text-blue-600 hover:text-blue-800 underline flex items-center gap-1"
-                            >
-                              🔗 {task.status === 'executing' ? 'View browser automation in progress' : 'View browser automation session'}
-                              <span className="text-xs">(opens in new tab)</span>
-                            </a>
-                          </div>
-                        )}
+                        
+                        {/* Browser-Use Link Section */}
+                        <div className="mt-3">
+                          {(taskBrowserUseUrls[task.id] || task.browserUseUrl) ? (
+                            <div className="flex items-center gap-2">
+                              <Button
+                                size="sm"
+                                className="bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white gap-2"
+                                onClick={() => window.open(taskBrowserUseUrls[task.id] || task.browserUseUrl, '_blank', 'noopener,noreferrer')}
+                              >
+                                <span className="text-lg">🔗</span>
+                                {task.status === 'executing' || loadingRecommendations[task.id] 
+                                  ? 'Watch Live Automation' 
+                                  : 'View Automation Session'}
+                              </Button>
+                              <span className="text-xs text-gray-500 italic">(opens in new tab)</span>
+                            </div>
+                          ) : loadingRecommendations[task.id] ? (
+                            <div className="flex items-center gap-2 p-2 bg-blue-50 border border-blue-200 rounded">
+                              <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
+                              <span className="text-sm text-blue-600">
+                                ⏳ Starting browser automation session...
+                              </span>
+                            </div>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
 
-                    {/* Suggestions */}
-                    {task.suggestions && task.suggestions.length > 0 && (
+                    {/* Recommendations */}
+                    {(taskSuggestions[task.id] || task.suggestions) && (taskSuggestions[task.id] || task.suggestions)!.length > 0 && (
                       <div className="mt-4">
-                        <p className="text-sm mb-3">Alfred's Suggestions:</p>
+                        <p className="text-sm font-medium mb-3">Recommendations:</p>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          {task.suggestions.map(suggestion => (
+                          {(taskSuggestions[task.id] || task.suggestions)!.map(suggestion => (
                             <div
                               key={suggestion.id}
                               className="border rounded-lg p-3 hover:border-indigo-300 hover:shadow-md transition-all"
@@ -292,7 +383,7 @@ export function EventWorkflow({ event, onBack, onTaskUpdate, onChatOpen }: Event
                               )}
                               <div className="flex items-start justify-between">
                                 <div className="flex-1">
-                                  <h4 className="mb-1">{suggestion.title}</h4>
+                                  <h4 className="mb-1 font-medium">{suggestion.title}</h4>
                                   <p className="text-sm text-gray-600">{suggestion.description}</p>
                                 </div>
                                 {suggestion.price && (
@@ -300,7 +391,12 @@ export function EventWorkflow({ event, onBack, onTaskUpdate, onChatOpen }: Event
                                 )}
                               </div>
                               {suggestion.link && (
-                                <Button size="sm" variant="outline" className="w-full mt-2">
+                                <Button 
+                                  size="sm" 
+                                  variant="outline" 
+                                  className="w-full mt-2"
+                                  onClick={() => window.open(suggestion.link, '_blank', 'noopener,noreferrer')}
+                                >
                                   View Details
                                 </Button>
                               )}
@@ -315,14 +411,29 @@ export function EventWorkflow({ event, onBack, onTaskUpdate, onChatOpen }: Event
                       {task.status === 'suggested' && (
                         <>
                           <Button
+                            variant="outline"
+                            onClick={() => handleGetRecommendations(task)}
+                            disabled={loadingRecommendations[task.id]}
+                            className="flex-1"
+                          >
+                            {loadingRecommendations[task.id] ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Searching...
+                              </>
+                            ) : (
+                              <>
+                                <Search className="mr-2 h-4 w-4" />
+                                Get Recommendations
+                              </>
+                            )}
+                          </Button>
+                          <Button
                             onClick={() => onTaskUpdate(event.id, task.id, 'approved')}
                             className="flex-1"
                           >
                             <CheckCircle2 className="mr-2 h-4 w-4" />
                             Approve
-                          </Button>
-                          <Button variant="outline" onClick={onChatOpen} className="flex-1">
-                            Modify
                           </Button>
                         </>
                       )}
@@ -341,17 +452,20 @@ export function EventWorkflow({ event, onBack, onTaskUpdate, onChatOpen }: Event
                             <Clock className="mr-2 h-4 w-4 animate-spin" />
                             In Progress...
                           </Button>
-                          {task.browserUseUrl ? (
-                            <a
-                              href={task.browserUseUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs text-blue-600 hover:text-blue-800 underline text-center"
+                          {task.browserUseUrl || taskBrowserUseUrls[task.id] ? (
+                            <Button
+                              size="sm"
+                              className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white"
+                              onClick={() => window.open(task.browserUseUrl || taskBrowserUseUrls[task.id], '_blank', 'noopener,noreferrer')}
                             >
-                              🔗 View browser automation
-                            </a>
+                              <span className="text-lg mr-1">🔗</span>
+                              Watch Live Automation
+                            </Button>
                           ) : (
-                            <span className="text-xs text-gray-500 text-center">Waiting for browser-use session...</span>
+                            <div className="flex items-center justify-center gap-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-600">
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              Waiting for browser-use session...
+                            </div>
                           )}
                         </div>
                       )}
@@ -361,15 +475,16 @@ export function EventWorkflow({ event, onBack, onTaskUpdate, onChatOpen }: Event
                             <CheckCircle2 className="mr-2 h-4 w-4" />
                             Completed
                           </Button>
-                          {task.browserUseUrl && (
-                            <a
-                              href={task.browserUseUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs text-blue-600 hover:text-blue-800 underline text-center"
+                          {(task.browserUseUrl || taskBrowserUseUrls[task.id]) && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="w-full border-blue-300 text-blue-600 hover:bg-blue-50"
+                              onClick={() => window.open(task.browserUseUrl || taskBrowserUseUrls[task.id], '_blank', 'noopener,noreferrer')}
                             >
-                              🔗 View session
-                            </a>
+                              <span className="mr-1">🔗</span>
+                              View Automation Session
+                            </Button>
                           )}
                         </div>
                       )}
