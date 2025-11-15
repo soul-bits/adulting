@@ -157,15 +157,15 @@ export function EventWorkflow({ event, onBack, onTaskUpdate, onChatOpen }: Event
               >
                 {event.status}
               </Badge>
-              <Button
-                onClick={onChatOpen}
-                className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
-              >
-                <Sparkles className="mr-2 h-4 w-4" />
-                Ask Alfred
-              </Button>
-            </div>
+            <Button
+              onClick={onChatOpen}
+              className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
+            >
+              <Sparkles className="mr-2 h-4 w-4" />
+              Ask Alfred
+            </Button>
           </div>
+        </div>
         </div>
 
         {/* Planning Status */}
@@ -190,14 +190,14 @@ export function EventWorkflow({ event, onBack, onTaskUpdate, onChatOpen }: Event
             </span>
           </div>
           {event.tasks.length > 0 ? (
-            <div className="w-full bg-gray-200 rounded-full h-3">
-              <div
-                className="bg-gradient-to-r from-green-500 to-emerald-500 h-3 rounded-full transition-all"
-                style={{
+          <div className="w-full bg-gray-200 rounded-full h-3">
+            <div
+              className="bg-gradient-to-r from-green-500 to-emerald-500 h-3 rounded-full transition-all"
+              style={{
                   width: `${Math.min((event.tasks.filter(t => t.status === 'completed').length / event.tasks.length) * 100, 100)}%`
-                }}
-              />
-            </div>
+              }}
+            />
+          </div>
           ) : (
             <div className="w-full bg-gray-200 rounded-full h-3">
               <div className="bg-gray-300 h-3 rounded-full" style={{ width: '0%' }} />
@@ -229,8 +229,8 @@ export function EventWorkflow({ event, onBack, onTaskUpdate, onChatOpen }: Event
             )}
           </Card>
         ) : (
-          <div className="space-y-6">
-            {Object.entries(groupedTasks).map(([category, tasks]) => (
+        <div className="space-y-6">
+          {Object.entries(groupedTasks).map(([category, tasks]) => (
             <Card key={category} className="p-6">
               <div className="flex items-center gap-2 mb-4">
                 {getCategoryIcon(category as Task['category'])}
@@ -339,8 +339,8 @@ export function EventWorkflow({ event, onBack, onTaskUpdate, onChatOpen }: Event
                 ))}
               </div>
             </Card>
-            ))}
-          </div>
+          ))}
+        </div>
         )}
 
         {/* Alfred's Recommendations */}

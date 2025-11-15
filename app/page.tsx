@@ -79,6 +79,7 @@ export default function Home() {
   // Use ref to track processed event IDs to prevent unnecessary re-runs
   const processedEventIdsRef = useRef<Set<string>>(new Set());
   const lastEventIdsRef = useRef<Set<string>>(new Set());
+  const birthdayAgentProcessedRef = useRef<Set<string>>(new Set()); // Track events processed by birthday agent
   
   useEffect(() => {
     console.log('[Page] 🔍 Agent processing effect triggered:', { loading, eventsCount: events.length });
@@ -266,18 +267,26 @@ export default function Home() {
       await new Promise(resolve => setTimeout(resolve, 300));
 
       // STEP 2: Birthday Agent - Process birthday events with browser-use
+      // CRITICAL: Only process events that have tasks from planning AND haven't been processed by birthday agent
       console.log('[Page] 🎂 Step 2: Birthday Agent - Processing birthday events...');
 
       // Process events using updated events map
       for (const [eventId, event] of updatedEvents.entries()) {
         try {
-          // Check if birthday agent already processed this event
+          // CRITICAL: Skip if already processed by birthday agent (prevents duplicate browser-use calls)
+          if (birthdayAgentProcessedRef.current.has(event.id)) {
+            console.log(`[Page] ⏭️  Birthday Agent: Event "${event.title}" already processed by birthday agent (tracked), skipping`);
+            continue;
+          }
+
+          // Check if birthday agent already processed this event (by checking for task)
           const birthdayTaskExists = event.tasks?.some(task => 
             task.id.startsWith(`task-birthday-dress-${event.id}`)
           );
           
           if (birthdayTaskExists) {
-            console.log(`[Page] ⏭️  Birthday Agent: Event "${event.title}" already processed, skipping`);
+            console.log(`[Page] ⏭️  Birthday Agent: Event "${event.title}" already has birthday task, marking as processed`);
+            birthdayAgentProcessedRef.current.add(event.id);
             continue;
           }
 
@@ -295,7 +304,9 @@ export default function Home() {
             continue;
           }
 
-          console.log(`[Page] 🎯 Birthday Agent: Processing "${event.title}"`);
+          // Mark as being processed BEFORE making the API call to prevent duplicate calls
+          birthdayAgentProcessedRef.current.add(event.id);
+          console.log(`[Page] 🎯 Birthday Agent: Processing "${event.title}" (browser-use will be called)`);
           
           const response = await fetch('/api/events/process-birthday', {
             method: 'POST',
@@ -325,11 +336,16 @@ export default function Home() {
             console.log(`[Page] ✅ Birthday Agent: Task created/updated for "${event.title}"`);
           } else if (data.processed === false) {
             console.log(`[Page] ⏭️  Birthday Agent: Event "${event.title}" already processed or not a birthday event`);
+            // Keep it marked as processed to prevent retries
           } else {
+            // On error, remove from processed set to allow retry (optional - you might want to keep it)
+            // birthdayAgentProcessedRef.current.delete(event.id);
             console.log(`[Page] ⚠️  Birthday Agent: Failed to process "${event.title}": ${data.message || 'Unknown error'}`);
           }
         } catch (error) {
           console.error(`[Page] ❌ Birthday Agent: Error processing "${event.title}":`, error);
+          // On exception, remove from processed set to allow retry (optional)
+          // birthdayAgentProcessedRef.current.delete(event.id);
           // Continue processing other events even if one fails
         }
       }

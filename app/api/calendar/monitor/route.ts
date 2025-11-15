@@ -77,7 +77,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   // Background monitoring is disabled - UI handles all calendar fetching
-  return NextResponse.json({
+    return NextResponse.json({
     success: false,
     message: 'Background monitoring is disabled. Calendar events are fetched only by the UI every 5 minutes.',
     note: 'Use GET /api/calendar/monitor for manual testing, or let the UI handle automatic fetching.',

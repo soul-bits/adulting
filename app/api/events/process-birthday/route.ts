@@ -33,9 +33,24 @@ export async function POST(request: NextRequest) {
     const shouldProcess = await shouldProcessBirthdayEvent(eventWithDate);
     
     if (!shouldProcess) {
+      console.log(`[API] Event ${eventWithDate.id} should not be processed by birthday agent`);
       return NextResponse.json({
         success: false,
         message: 'Event is not a birthday event or has already been processed',
+        processed: false,
+      });
+    }
+
+    // Additional check: Verify event doesn't already have a birthday task
+    const hasBirthdayTask = eventWithDate.tasks?.some(task => 
+      task.id.startsWith(`task-birthday-dress-${eventWithDate.id}`)
+    );
+    
+    if (hasBirthdayTask) {
+      console.log(`[API] Event ${eventWithDate.id} already has birthday task, skipping browser-use call`);
+      return NextResponse.json({
+        success: false,
+        message: 'Event already has a birthday task',
         processed: false,
       });
     }

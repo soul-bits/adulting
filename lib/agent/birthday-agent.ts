@@ -78,13 +78,24 @@ function extractRecipientFromTitle(title: string): { recipient: string; productQ
  * @param onTaskCreated - Callback when task is created (for UI updates)
  * @param onTaskUpdated - Callback when task is updated (for UI updates)
  */
+// Track events currently being processed by birthday agent to prevent duplicate browser-use calls
+const processingEvents = new Set<string>();
+
 export async function processBirthdayEvent(
   event: EventType,
   onTaskCreated?: (task: Task) => void,
   onTaskUpdated?: (taskId: string, updates: Partial<Task>) => void
 ): Promise<void> {
+  // CRITICAL: Check if this event is already being processed (prevents duplicate browser-use calls)
+  if (processingEvents.has(event.id)) {
+    console.log(`[Birthday Agent] ⚠️  Event ${event.id} is already being processed by birthday agent, skipping duplicate call`);
+    return;
+  }
+
   try {
-    console.log(`\n[Birthday Agent] 🎂 Processing birthday event: "${event.title}"`);
+    // Mark as being processed BEFORE any async operations
+    processingEvents.add(event.id);
+    console.log(`\n[Birthday Agent] 🎂 Processing birthday event: "${event.title}" (ID: ${event.id})`);
     
     // Check if birthday agent has already processed this event
     // Look for a task created by this agent (starts with "task-birthday-dress-")
@@ -94,6 +105,7 @@ export async function processBirthdayEvent(
     
     if (birthdayTaskExists) {
       console.log(`[Birthday Agent] ⏭️  Event ${event.id} already processed by birthday agent, skipping`);
+      processingEvents.delete(event.id);
       return;
     }
     
@@ -101,6 +113,7 @@ export async function processBirthdayEvent(
     const analysis = await analyzeEvent(event);
     if (analysis.eventType !== 'birthday') {
       console.log(`[Birthday Agent] ⚠️  Event type is "${analysis.eventType}", not birthday. Skipping.`);
+      processingEvents.delete(event.id);
       return;
     }
     
@@ -128,7 +141,8 @@ export async function processBirthdayEvent(
     console.log(`[Birthday Agent] ✅ Created task: ${task.id} (status: executing)`);
     
     // Use browser-use to search Amazon and add to cart
-    console.log(`[Birthday Agent] 🛒 Starting Amazon search and cart addition...`);
+    // CRITICAL: This is the ONLY place browser-use is called for this event
+    console.log(`[Birthday Agent] 🛒 Starting Amazon search and cart addition (browser-use call)...`);
     const result = await searchAmazonAndAddToCart(productQuery, recipient);
     
     // Update task based on result
@@ -169,8 +183,14 @@ export async function processBirthdayEvent(
     await markEventProcessed(event.id);
     console.log(`[Birthday Agent] ✅ Marked event ${event.id} as processed`);
     
+    // Remove from processing set after successful completion
+    processingEvents.delete(event.id);
+    
   } catch (error) {
     console.error(`[Birthday Agent] ❌ Error processing birthday event:`, error);
+    
+    // Remove from processing set on error (allows retry if needed)
+    processingEvents.delete(event.id);
     
     // Update task to "issue" status if it was created
     if (onTaskUpdated) {
