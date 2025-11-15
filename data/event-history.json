@@ -1,0 +1,82 @@
+{
+  "events": {
+    "6aknpj1l47kq17j8cm4eooiokg": {
+      "eventId": "6aknpj1l47kq17j8cm4eooiokg",
+      "eventTitle": "** Niece's 5th Birthday Party Celebration",
+      "planningStatus": "completed",
+      "planningTasks": [
+        {
+          "id": "task-1763244118184-0",
+          "eventId": "6aknpj1l47kq17j8cm4eooiokg",
+          "category": "shopping",
+          "title": "Order cake",
+          "description": "Purchase or order: Order cake",
+          "status": "suggested",
+          "needsApproval": true,
+          "suggestions": []
+        },
+        {
+          "id": "task-1763244118184-1",
+          "eventId": "6aknpj1l47kq17j8cm4eooiokg",
+          "category": "booking",
+          "title": "Book decorations",
+          "description": "Book or reserve: Book decorations",
+          "status": "suggested",
+          "needsApproval": true,
+          "suggestions": []
+        },
+        {
+          "id": "task-1763244118184-2",
+          "eventId": "6aknpj1l47kq17j8cm4eooiokg",
+          "category": "communication",
+          "title": "Send invitations",
+          "description": "Send communications: Send invitations",
+          "status": "suggested",
+          "needsApproval": false,
+          "suggestions": []
+        },
+        {
+          "id": "task-1763244118184-3",
+          "eventId": "6aknpj1l47kq17j8cm4eooiokg",
+          "category": "preparation",
+          "title": "Plan activities and games",
+          "description": "Plan activities and games",
+          "status": "suggested",
+          "needsApproval": false,
+          "suggestions": []
+        },
+        {
+          "id": "task-1763244118184-4",
+          "eventId": "6aknpj1l47kq17j8cm4eooiokg",
+          "category": "preparation",
+          "title": "Arrange for food and drinks",
+          "description": "Arrange for food and drinks",
+          "status": "suggested",
+          "needsApproval": false,
+          "suggestions": []
+        },
+        {
+          "id": "task-birthday-cake-1763244118184",
+          "eventId": "6aknpj1l47kq17j8cm4eooiokg",
+          "category": "shopping",
+          "title": "Order Birthday Cake",
+          "description": "Order a birthday cake for unknown guests",
+          "status": "suggested",
+          "needsApproval": true
+        },
+        {
+          "id": "task-birthday-invites-1763244118184",
+          "eventId": "6aknpj1l47kq17j8cm4eooiokg",
+          "category": "communication",
+          "title": "Send Birthday Invitations",
+          "description": "Send invitations to unknown guests with RSVP form",
+          "status": "suggested",
+          "needsApproval": true
+        }
+      ],
+      "processedAt": "2025-11-15T22:01:49.397Z",
+      "lastUpdated": "2025-11-15T22:01:58.186Z"
+    }
+  },
+  "lastUpdated": "2025-11-15T22:01:58.186Z"
+}

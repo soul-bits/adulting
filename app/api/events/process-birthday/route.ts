@@ -77,6 +77,8 @@ export async function POST(request: NextRequest) {
       }
     );
 
+    // Note: Birthday agent task is saved by processBirthdayEvent itself
+
     return NextResponse.json({
       success: true,
       message: 'Birthday event processed successfully',

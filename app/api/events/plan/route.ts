@@ -12,14 +12,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import { generateTasks } from '@/lib/agent/task-planner';
 import { analyzeEvent } from '@/lib/agent/event-analyzer';
 import { isEventProcessed, markEventProcessed } from '@/lib/agent/event-processor';
+import { savePlanningTasks, updatePlanningStatus } from '@/lib/storage/event-history';
 import { EventType } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
+  let eventId: string | null = null;
+  let eventTitle: string | null = null;
+  
   try {
     const body = await request.json();
     const event: EventType = body.event;
+    eventId = event?.id || null;
+    eventTitle = event?.title || null;
 
     if (!event || !event.id || !event.title) {
       return NextResponse.json(
@@ -58,6 +64,8 @@ export async function POST(request: NextRequest) {
     // CRITICAL: Check if event already has tasks - if so, do NOT modify anything
     if (eventWithDate.tasks && eventWithDate.tasks.length > 0) {
       console.log(`[Planning Agent] ⏭️  Event ${eventWithDate.id} already has ${eventWithDate.tasks.length} task(s), skipping planning (no changes)`);
+      // Update planning status to completed since tasks already exist
+      await updatePlanningStatus(eventWithDate.id, eventWithDate.title, 'completed');
       return NextResponse.json({
         success: true,
         alreadyPlanned: true,
@@ -86,6 +94,8 @@ export async function POST(request: NextRequest) {
     // ONLY process birthday events
     if (analysis.eventType !== 'birthday') {
       console.log(`[Planning Agent] ⏭️  Event is "${analysis.eventType}", not birthday. Skipping planning.`);
+      // Update planning status to completed (not a birthday, so planning is done)
+      await updatePlanningStatus(eventWithDate.id, eventWithDate.title, 'completed');
       return NextResponse.json({
         success: true,
         skipped: true,
@@ -95,6 +105,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Update planning status to 'planning' before starting
+    await updatePlanningStatus(eventWithDate.id, eventWithDate.title, 'planning');
     console.log(`[Planning Agent] 🎂 Birthday event detected! Proceeding with planning...`);
     console.log(`[Planning Agent] Context: ${analysis.context}`);
     console.log(`[Planning Agent] Required actions: ${analysis.requiredActions.join(', ') || 'None'}`);
@@ -107,6 +119,10 @@ export async function POST(request: NextRequest) {
     tasks.forEach((task, index) => {
       console.log(`[Planning Agent]   ${index + 1}. ${task.title} (${task.category})`);
     });
+
+    // Save planning tasks to history
+    await savePlanningTasks(eventWithDate.id, eventWithDate.title, tasks, 'completed');
+    console.log(`[Planning Agent] ✅ Saved planning tasks to history`);
 
     // Mark event as processed
     await markEventProcessed(eventWithDate.id);
@@ -126,6 +142,14 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('[Planning Agent] ❌ Error planning event:', error);
+    // Update planning status to error if we have event info
+    if (eventId && eventTitle) {
+      try {
+        await updatePlanningStatus(eventId, eventTitle, 'error');
+      } catch (e) {
+        console.error('[Planning Agent] Error updating planning status:', e);
+      }
+    }
     return NextResponse.json(
       {
         success: false,

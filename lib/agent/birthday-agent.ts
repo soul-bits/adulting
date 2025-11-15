@@ -12,6 +12,7 @@ import { EventType, Task } from '@/lib/types';
 import { isEventProcessed, markEventProcessed } from './event-processor';
 import { searchAmazonAndAddToCart } from './browser-actions';
 import { analyzeEvent } from './event-analyzer';
+import { saveBirthdayAgentTask } from '@/lib/storage/event-history';
 
 /**
  * Extract recipient type from event title using keyword matching
@@ -163,6 +164,10 @@ export async function processBirthdayEvent(
         onTaskUpdated(task.id, updatedTask);
       }
       
+      // Save the completed task to history
+      const completedTask = { ...task, ...updatedTask };
+      await saveBirthdayAgentTask(event.id, event.title, completedTask);
+      
       console.log(`[Birthday Agent] ✅ Task ${task.id} completed successfully`);
       console.log(`[Birthday Agent] Cart URL: ${result.cartUrl || 'Not provided'}`);
     } else {
@@ -175,6 +180,10 @@ export async function processBirthdayEvent(
       if (onTaskUpdated) {
         onTaskUpdated(task.id, updatedTask);
       }
+      
+      // Save the failed task to history
+      const failedTask = { ...task, ...updatedTask };
+      await saveBirthdayAgentTask(event.id, event.title, failedTask);
       
       console.error(`[Birthday Agent] ❌ Task ${task.id} failed: ${result.message}`);
     }

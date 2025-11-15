@@ -10,6 +10,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getCalendarClient, fetchCalendarEvents, createCalendarEvent, convertGoogleEventToEventType } from '@/lib/integrations/google-calendar';
+import { mergeEventsHistory } from '@/lib/storage/event-history';
 import { EventType } from '@/lib/types';
 import { env } from '@/lib/config/env';
 
@@ -62,10 +63,15 @@ export async function GET(request: NextRequest) {
     console.log(`[Calendar API] Successfully converted ${events.length} events`);
     console.log(`[Calendar API] Event titles:`, events.map(e => e.title).join(', '));
 
+    // Merge stored event history (tasks, planning status, etc.)
+    console.log(`[Calendar API] Loading stored event history...`);
+    const eventsWithHistory = await mergeEventsHistory(events);
+    console.log(`[Calendar API] ✅ Merged event history for ${eventsWithHistory.length} event(s)`);
+
     return NextResponse.json({
       success: true,
-      count: events.length,
-      events,
+      count: eventsWithHistory.length,
+      events: eventsWithHistory,
       rawGoogleEvents: googleEvents.length, // For debugging
       fetchedAt: new Date().toISOString(),
     });
