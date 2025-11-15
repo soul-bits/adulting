@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, MapPin, Users, Calendar, Sparkles, ShoppingCart, Mail, Package, CheckCircle2, Clock, AlertCircle, Loader2, Search } from 'lucide-react';
+import { ArrowLeft, MapPin, Users, Calendar, Sparkles, ShoppingCart, Mail, Package, CheckCircle2, Clock, AlertCircle, Loader2, Search, Send } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
@@ -372,6 +372,41 @@ export function EventWorkflow({ event, onBack, onTaskUpdate, onChatOpen }: Event
                         </div>
                       </div>
                     </div>
+
+                    {/* Email Sent Details for Send Invitations Task */}
+                    {task.status === 'completed' && task.title.toLowerCase().includes('send invitations') && (
+                      <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+                        <div className="flex items-start gap-3">
+                          <div className="p-2 bg-green-100 rounded-full">
+                            <Send className="h-5 w-5 text-green-600" />
+                          </div>
+                          <div className="flex-1">
+                            <h4 className="font-medium text-green-900 mb-2">✅ Invitations Sent Successfully</h4>
+                            <div className="space-y-2 text-sm">
+                              <div className="flex items-center gap-2 text-green-700">
+                                <Mail className="h-4 w-4" />
+                                <span className="font-medium">7 emails sent</span>
+                              </div>
+                              <div className="mt-3 p-3 bg-white rounded border border-green-200">
+                                <p className="text-xs text-gray-500 mb-2">Recipients:</p>
+                                <div className="grid grid-cols-2 gap-1 text-xs text-gray-700">
+                                  <div>• sarah.johnson@email.com</div>
+                                  <div>• tom.martinez@email.com</div>
+                                  <div>• emma.wilson@email.com</div>
+                                  <div>• michael.brown@email.com</div>
+                                  <div>• lisa.davis@email.com</div>
+                                  <div>• james.taylor@email.com</div>
+                                  <div>• amy.anderson@email.com</div>
+                                </div>
+                              </div>
+                              <p className="text-xs text-green-600 mt-2">
+                                All invitations include event details, RSVP link, and calendar attachment.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Recommendations */}
                     {(taskSuggestions[task.id] || task.suggestions) && (taskSuggestions[task.id] || task.suggestions)!.length > 0 && (

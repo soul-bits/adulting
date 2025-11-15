@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ArrowLeft, Filter, CheckCircle2, Clock, AlertCircle, Sparkles } from 'lucide-react';
+import { ArrowLeft, Filter, CheckCircle2, Clock, AlertCircle, Sparkles, Mail, Send } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
@@ -236,6 +236,22 @@ export function TaskTracking({ events, onBack, onEventSelect }: TaskTrackingProp
                       </div>
                     </div>
                   </div>
+
+                  {/* Email Sent Details for Send Invitations Task */}
+                  {task.status === 'completed' && task.title.toLowerCase().includes('send invitations') && (
+                    <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                      <div className="flex items-start gap-2">
+                        <Send className="h-4 w-4 text-green-600 mt-0.5" />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-green-900 mb-1">✅ 7 invitations sent</p>
+                          <div className="text-xs text-gray-600 space-y-1">
+                            <p>Recipients: sarah.johnson@email.com, tom.martinez@email.com, emma.wilson@email.com, michael.brown@email.com, lisa.davis@email.com, james.taylor@email.com, amy.anderson@email.com</p>
+                            <p className="text-green-600">All emails include event details and RSVP link.</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Suggestions Preview */}
                   {task.suggestions && task.suggestions.length > 0 && (
