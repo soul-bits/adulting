@@ -1,126 +1,65 @@
 /**
- * Task Planner
+ * Task Planner - Simplified Version
  * 
- * Generates appropriate tasks based on event analysis and user responses to questions.
- * Tasks are determined dynamically by AI based on event type and context.
+ * Generates ONLY 3 fixed tasks for birthday events:
+ * 1. Order dress for niece
+ * 2. Book venue
+ * 3. Send invitations
  */
 
 import { EventType, Task } from '@/lib/types';
-import { analyzeEvent, determineTaskCategories } from './event-analyzer';
+import { analyzeEvent } from './event-analyzer';
 
 /**
- * Generate tasks for an event based on analysis and question responses
+ * Generate tasks for a birthday event - ONLY 3 tasks
  * @param event - Event to generate tasks for
- * @param questionResponses - User responses to clarifying questions (key-value pairs)
+ * @param questionResponses - User responses (not used for simplified version)
  */
 export async function generateTasks(
   event: Partial<EventType>,
   questionResponses: Record<string, string> = {}
 ): Promise<Task[]> {
-  // Analyze the event
+  // Analyze the event to verify it's a birthday
   const analysis = await analyzeEvent(event);
 
-  // Determine task categories based on analysis
-  const taskTemplates = determineTaskCategories(event, analysis);
+  // Only generate tasks for birthday events
+  if (analysis.eventType !== 'birthday') {
+    console.log(`[Task Planner] Event is not a birthday event, skipping task generation`);
+    return [];
+  }
 
-  // Generate tasks with unique IDs
-  const tasks: Task[] = taskTemplates.map((template, index) => {
-    // Determine if task needs approval based on category
-    const needsApproval = template.category === 'shopping' || template.category === 'booking';
-
-    return {
-      id: `task-${Date.now()}-${index}`,
-      eventId: event.id || '',
-      category: template.category,
-      title: template.title,
-      description: template.description,
-      status: 'suggested',
-      needsApproval,
-      suggestions: [], // Suggestions will be generated separately if needed
-    };
-  });
-
-  // Add context-specific tasks based on event type
-  const additionalTasks = generateContextSpecificTasks(event, analysis, questionResponses);
-  tasks.push(...additionalTasks);
-
-  return tasks;
-}
-
-/**
- * Generate context-specific tasks based on event type and responses
- */
-function generateContextSpecificTasks(
-  event: Partial<EventType>,
-  analysis: Awaited<ReturnType<typeof analyzeEvent>>,
-  questionResponses: Record<string, string>
-): Task[] {
-  const tasks: Task[] = [];
-
-  // Birthday-specific tasks
-  if (analysis.eventType === 'birthday') {
-    const guestCount = questionResponses['number of guests'] || questionResponses['guests'] || 'unknown';
-    
-    tasks.push({
-      id: `task-birthday-cake-${Date.now()}`,
+  // Generate the 3 fixed tasks for birthday event planning
+  const tasks: Task[] = [
+    {
+      id: `task-birthday-dress-${Date.now()}-0`,
       eventId: event.id || '',
       category: 'shopping',
-      title: 'Order Birthday Cake',
-      description: `Order a birthday cake for ${guestCount} guests`,
+      title: 'Order dress for niece',
+      description: 'Order a beautiful dress for your niece from online retailers. Auto-fetch recommendations using browser automation.',
       status: 'suggested',
       needsApproval: true,
-    });
-
-    tasks.push({
-      id: `task-birthday-invites-${Date.now()}`,
+    },
+    {
+      id: `task-birthday-venue-${Date.now()}-1`,
+      eventId: event.id || '',
+      category: 'booking',
+      title: 'Book venue',
+      description: 'Book a suitable venue for the birthday party. Get venue recommendations using AI.',
+      status: 'suggested',
+      needsApproval: true,
+    },
+    {
+      id: `task-birthday-invites-${Date.now()}-2`,
       eventId: event.id || '',
       category: 'communication',
-      title: 'Send Birthday Invitations',
-      description: `Send invitations to ${guestCount} guests with RSVP form`,
-      status: 'suggested',
-      needsApproval: true,
-    });
-  }
-
-  // Meeting/conference-specific tasks
-  if (analysis.eventType === 'meeting' || analysis.eventType === 'conference') {
-    tasks.push({
-      id: `task-meeting-prep-${Date.now()}`,
-      eventId: event.id || '',
-      category: 'preparation',
-      title: 'Prepare Meeting Materials',
-      description: 'Prepare agenda, slides, and handouts for the meeting',
+      title: 'Send invitations',
+      description: 'Send birthday invitations to all guests with RSVP and event details. Get communication tool recommendations.',
       status: 'suggested',
       needsApproval: false,
-    });
-  }
+    },
+  ];
 
-  // Dinner-specific tasks
-  if (analysis.eventType === 'dinner') {
-    tasks.push({
-      id: `task-dinner-reservation-${Date.now()}`,
-      eventId: event.id || '',
-      category: 'booking',
-      title: 'Make Restaurant Reservation',
-      description: 'Reserve a table at the restaurant',
-      status: 'suggested',
-      needsApproval: true,
-    });
-  }
-
-  // Travel-specific tasks
-  if (analysis.eventType === 'travel') {
-    tasks.push({
-      id: `task-travel-booking-${Date.now()}`,
-      eventId: event.id || '',
-      category: 'booking',
-      title: 'Book Travel Arrangements',
-      description: 'Book flights, hotels, and transportation',
-      status: 'suggested',
-      needsApproval: true,
-    });
-  }
-
+  console.log(`[Task Planner] ✅ Generated 3 birthday tasks for event: "${event.title}"`);
   return tasks;
 }
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, MapPin, Users, Calendar, Sparkles, ShoppingCart, Mail, Package, CheckCircle2, Clock, AlertCircle, Loader2, Search } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
@@ -22,7 +22,7 @@ export function EventWorkflow({ event, onBack, onTaskUpdate, onChatOpen }: Event
   const [loadingRecommendations, setLoadingRecommendations] = useState<Record<string, boolean>>({});
   const [taskSuggestions, setTaskSuggestions] = useState<Record<string, Task['suggestions']>>({});
   const [taskBrowserUseUrls, setTaskBrowserUseUrls] = useState<Record<string, string>>({});
-  const [autoFetchedTasks, setAutoFetchedTasks] = useState<Set<string>>(new Set());
+  const autoFetchInitiatedRef = useRef<Set<string>>(new Set());
 
   const handleGetRecommendations = async (task: Task) => {
     // Prevent duplicate calls
@@ -34,7 +34,12 @@ export function EventWorkflow({ event, onBack, onTaskUpdate, onChatOpen }: Event
     setLoadingRecommendations(prev => ({ ...prev, [task.id]: true }));
     
     try {
-      const response = await fetch('/api/tasks/recommendations', {
+      // Check if this is a dress order task - use browser-use only for this
+      const taskTitle = task.title.toLowerCase();
+      const useBrowserUse = taskTitle.includes('order dress');
+      
+      const endpoint = useBrowserUse ? '/api/tasks/recommendations' : '/api/tasks/recommendations-openai';
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -61,7 +66,7 @@ export function EventWorkflow({ event, onBack, onTaskUpdate, onChatOpen }: Event
             [task.id]: data.suggestions,
           }));
           console.log(`[EventWorkflow] ✅ Got ${data.suggestions.length} recommendation(s) for task ${task.id}`);
-        } else {
+        } else if (useBrowserUse) {
           console.log(`[EventWorkflow] ⏳ Browser-use session started, recommendations will be available soon`);
         }
       } else {
@@ -78,23 +83,29 @@ export function EventWorkflow({ event, onBack, onTaskUpdate, onChatOpen }: Event
     }
   };
 
-  // Automatically fetch recommendations for all suggested tasks
+  // Automatically fetch recommendations for dress order tasks ONLY ONCE
   useEffect(() => {
-    const suggestedTasks = event.tasks.filter(task => task.status === 'suggested' && !autoFetchedTasks.has(task.id));
+    const shouldAutoFetch = (task: Task) => {
+      const taskTitle = task.title.toLowerCase();
+      // Only auto-fetch for dress order tasks (using browser-use)
+      return taskTitle.includes('order dress');
+    };
+
+    // Find dress order tasks that haven't been initiated yet
+    const dressOrderTask = event.tasks.find(
+      task => task.status === 'suggested' && 
+              !autoFetchInitiatedRef.current.has(task.id) && 
+              shouldAutoFetch(task)
+    );
     
-    if (suggestedTasks.length > 0) {
-      console.log(`[EventWorkflow] 🤖 Auto-fetching recommendations for ${suggestedTasks.length} suggested task(s)`);
+    if (dressOrderTask && !loadingRecommendations[dressOrderTask.id]) {
+      // Mark as initiated IMMEDIATELY to prevent duplicate calls
+      autoFetchInitiatedRef.current.add(dressOrderTask.id);
       
-      // Fetch recommendations for each suggested task
-      suggestedTasks.forEach(task => {
-        if (!loadingRecommendations[task.id]) {
-          console.log(`[EventWorkflow] Auto-fetching recommendations for task: ${task.id}`);
-          handleGetRecommendations(task);
-          setAutoFetchedTasks(prev => new Set([...prev, task.id]));
-        }
-      });
+      console.log(`[EventWorkflow] 🤖 Auto-fetching browser-use for dress order task: ${dressOrderTask.title}`);
+      handleGetRecommendations(dressOrderTask);
     }
-  }, [event.tasks, autoFetchedTasks, loadingRecommendations, handleGetRecommendations]);
+  }, [event.tasks, event.id]);
 
   const getCategoryIcon = (category: Task['category']) => {
     switch (category) {

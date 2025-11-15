@@ -11,8 +11,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateTasks } from '@/lib/agent/task-planner';
 import { analyzeEvent } from '@/lib/agent/event-analyzer';
-import { isEventProcessed, markEventProcessed } from '@/lib/agent/event-processor';
-import { savePlanningTasks, updatePlanningStatus } from '@/lib/storage/event-history';
 import { EventType } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -61,28 +59,27 @@ export async function POST(request: NextRequest) {
 
     console.log(`[Planning Agent] 🎯 Checking event: "${eventWithDate.title}" (ID: ${eventWithDate.id})`);
 
+    // Check if event is in the future - skip planning for past events
+    const now = new Date();
+    if (eventWithDate.date < now) {
+      console.log(`[Planning Agent] ⏭️  Event "${eventWithDate.title}" is in the past (${eventWithDate.date.toISOString()}). Skipping planning.`);
+      return NextResponse.json({
+        success: false,
+        skipped: true,
+        message: 'Event is in the past. Only future events are planned.',
+        eventDate: eventWithDate.date.toISOString(),
+        tasks: [],
+      });
+    }
+
     // CRITICAL: Check if event already has tasks - if so, do NOT modify anything
     if (eventWithDate.tasks && eventWithDate.tasks.length > 0) {
       console.log(`[Planning Agent] ⏭️  Event ${eventWithDate.id} already has ${eventWithDate.tasks.length} task(s), skipping planning (no changes)`);
-      // Update planning status to completed since tasks already exist
-      await updatePlanningStatus(eventWithDate.id, eventWithDate.title, 'completed');
       return NextResponse.json({
         success: true,
         alreadyPlanned: true,
         message: 'Event already has tasks - no changes made',
         tasks: eventWithDate.tasks,
-      });
-    }
-
-    // Check if event has been processed before (using event processor)
-    const alreadyProcessed = await isEventProcessed(eventWithDate.id);
-    if (alreadyProcessed) {
-      console.log(`[Planning Agent] ⏭️  Event ${eventWithDate.id} already processed, skipping planning`);
-      return NextResponse.json({
-        success: true,
-        alreadyPlanned: true,
-        message: 'Event already processed',
-        tasks: [],
       });
     }
 
@@ -94,8 +91,6 @@ export async function POST(request: NextRequest) {
     // ONLY process birthday events
     if (analysis.eventType !== 'birthday') {
       console.log(`[Planning Agent] ⏭️  Event is "${analysis.eventType}", not birthday. Skipping planning.`);
-      // Update planning status to completed (not a birthday, so planning is done)
-      await updatePlanningStatus(eventWithDate.id, eventWithDate.title, 'completed');
       return NextResponse.json({
         success: true,
         skipped: true,
@@ -105,8 +100,6 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Update planning status to 'planning' before starting
-    await updatePlanningStatus(eventWithDate.id, eventWithDate.title, 'planning');
     console.log(`[Planning Agent] 🎂 Birthday event detected! Proceeding with planning...`);
     console.log(`[Planning Agent] Context: ${analysis.context}`);
     console.log(`[Planning Agent] Required actions: ${analysis.requiredActions.join(', ') || 'None'}`);
@@ -119,14 +112,6 @@ export async function POST(request: NextRequest) {
     tasks.forEach((task, index) => {
       console.log(`[Planning Agent]   ${index + 1}. ${task.title} (${task.category})`);
     });
-
-    // Save planning tasks to history
-    await savePlanningTasks(eventWithDate.id, eventWithDate.title, tasks, 'completed');
-    console.log(`[Planning Agent] ✅ Saved planning tasks to history`);
-
-    // Mark event as processed
-    await markEventProcessed(eventWithDate.id);
-    console.log(`[Planning Agent] ✅ Marked event ${eventWithDate.id} as processed`);
 
     return NextResponse.json({
       success: true,
@@ -142,14 +127,6 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('[Planning Agent] ❌ Error planning event:', error);
-    // Update planning status to error if we have event info
-    if (eventId && eventTitle) {
-      try {
-        await updatePlanningStatus(eventId, eventTitle, 'error');
-      } catch (e) {
-        console.error('[Planning Agent] Error updating planning status:', e);
-      }
-    }
     return NextResponse.json(
       {
         success: false,

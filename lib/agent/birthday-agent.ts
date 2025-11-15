@@ -9,10 +9,8 @@
  */
 
 import { EventType, Task } from '@/lib/types';
-import { isEventProcessed, markEventProcessed } from './event-processor';
 import { searchAmazonAndAddToCart } from './browser-actions';
 import { analyzeEvent } from './event-analyzer';
-import { saveBirthdayAgentTask } from '@/lib/storage/event-history';
 
 /**
  * Extract recipient type from event title using keyword matching
@@ -98,14 +96,10 @@ export async function processBirthdayEvent(
     processingEvents.add(event.id);
     console.log(`\n[Birthday Agent] 🎂 Processing birthday event: "${event.title}" (ID: ${event.id})`);
     
-    // Check if birthday agent has already processed this event
-    // Look for a task created by this agent (starts with "task-birthday-dress-")
-    const birthdayTaskExists = event.tasks?.some(task => 
-      task.id.startsWith(`task-birthday-dress-${event.id}`)
-    );
-    
-    if (birthdayTaskExists) {
-      console.log(`[Birthday Agent] ⏭️  Event ${event.id} already processed by birthday agent, skipping`);
+    // Check if event is in the future - skip processing for past events
+    const now = new Date();
+    if (event.date < now) {
+      console.log(`[Birthday Agent] ⏭️  Event "${event.title}" is in the past (${event.date.toISOString()}). Skipping processing.`);
       processingEvents.delete(event.id);
       return;
     }
@@ -118,28 +112,39 @@ export async function processBirthdayEvent(
       return;
     }
     
+    // Check if a dress order task already exists (from task planner)
+    // Look for task with title containing "order dress" or "dress"
+    const existingDressTask = event.tasks?.find(task => {
+      const title = task.title.toLowerCase();
+      return (title.includes('order dress') || title.includes('dress')) && task.category === 'shopping';
+    });
+    
+    if (existingDressTask) {
+      console.log(`[Birthday Agent] ⏭️  Event ${event.id} already has dress order task (${existingDressTask.id}), skipping task creation`);
+      processingEvents.delete(event.id);
+      return;
+    }
+    
+    // Check if birthday agent has already processed this event (old check for legacy tasks)
+    const birthdayTaskExists = event.tasks?.some(task => 
+      task.id.startsWith(`task-birthday-dress-${event.id}`)
+    );
+    
+    if (birthdayTaskExists) {
+      console.log(`[Birthday Agent] ⏭️  Event ${event.id} already processed by birthday agent, skipping`);
+      processingEvents.delete(event.id);
+      return;
+    }
+    
     // Extract recipient information
     const { recipient, productQuery, gender } = extractRecipientFromTitle(event.title);
     console.log(`[Birthday Agent] 📋 Extracted recipient: ${recipient}, product: ${productQuery}`);
     
-    // Create task with status "executing"
-    const task: Task = {
-      id: `task-birthday-dress-${event.id}-${Date.now()}`,
-      eventId: event.id,
-      category: 'shopping',
-      title: `Order dress for ${recipient}`,
-      description: `Order a ${productQuery} for ${recipient} from Amazon for the birthday event.`,
-      status: 'executing',
-      needsApproval: true, // Adding to cart requires user approval
-      suggestions: [],
-    };
-    
-    // Notify UI that task was created
-    if (onTaskCreated) {
-      onTaskCreated(task);
-    }
-    
-    console.log(`[Birthday Agent] ✅ Created task: ${task.id} (status: executing)`);
+    // NOTE: We should NOT create a new task here since task planner already creates it
+    // This birthday agent should be disabled or only used for browser-use execution
+    console.log(`[Birthday Agent] ⚠️  No existing dress task found, but task planner should have created one. Skipping to avoid duplicates.`);
+    processingEvents.delete(event.id);
+    return;
     
     // Use browser-use to search Amazon and add to cart
     // CRITICAL: This is the ONLY place browser-use is called for this event
@@ -180,10 +185,6 @@ export async function processBirthdayEvent(
         onTaskUpdated(task.id, updatedTask);
       }
       
-      // Save the completed task to history
-      const completedTask = { ...task, ...updatedTask };
-      await saveBirthdayAgentTask(event.id, event.title, completedTask);
-      
       console.log(`[Birthday Agent] ✅ Task ${task.id} completed successfully`);
       console.log(`[Birthday Agent] Cart URL: ${result.cartUrl || 'Not provided'}`);
       console.log(`[Birthday Agent] Browser-use URL: ${browserUseUrl || 'Not provided'}`);
@@ -199,16 +200,8 @@ export async function processBirthdayEvent(
         onTaskUpdated(task.id, updatedTask);
       }
       
-      // Save the failed task to history
-      const failedTask = { ...task, ...updatedTask };
-      await saveBirthdayAgentTask(event.id, event.title, failedTask);
-      
       console.error(`[Birthday Agent] ❌ Task ${task.id} failed: ${result.message}`);
     }
-    
-    // Mark event as processed
-    await markEventProcessed(event.id);
-    console.log(`[Birthday Agent] ✅ Marked event ${event.id} as processed`);
     
     // Remove from processing set after successful completion
     processingEvents.delete(event.id);

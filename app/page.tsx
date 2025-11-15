@@ -25,16 +25,32 @@ export default function Home() {
   const [events, setEvents] = useState<EventType[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
+  // Track last fetch time to prevent duplicate fetches
+  const lastFetchTimeRef = useRef<number>(0);
+  const FETCH_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+
   // Fetch calendar events on component mount and every 5 minutes
   // NOTE: This is the ONLY place calendar events are fetched automatically.
   // Background monitoring is disabled - all calendar fetching happens here in the UI.
   useEffect(() => {
     async function fetchEvents() {
+      const now = Date.now();
+      const timeSinceLastFetch = now - lastFetchTimeRef.current;
+      
+      // Prevent fetching if it was fetched less than 5 minutes ago
+      if (timeSinceLastFetch < FETCH_INTERVAL_MS && lastFetchTimeRef.current > 0) {
+        const minutesSince = Math.floor(timeSinceLastFetch / 60000);
+        console.log(`[Page] ⏭️  Skipping calendar fetch - last fetched ${minutesSince} minute(s) ago (minimum 5 minutes)`);
+        return;
+      }
+
       try {
         setLoading(true);
         setError(null);
         
         console.log('[Page] 📅 Fetching calendar events...');
+        lastFetchTimeRef.current = now;
+        
         const response = await fetch('/api/calendar/events');
         const data = await response.json();
         
@@ -58,22 +74,24 @@ export default function Home() {
         console.error('Error fetching calendar events:', err);
         setError(err instanceof Error ? err.message : 'Failed to load calendar events');
         setEvents([]);
+        // Reset last fetch time on error so we can retry
+        lastFetchTimeRef.current = 0;
       } finally {
         setLoading(false);
       }
     }
     
-    // Fetch immediately on mount
+    // Fetch immediately on mount (only if not recently fetched)
     fetchEvents();
     
     // Then fetch every 5 minutes (300000ms) - this is the ONLY automatic calendar fetching
     const intervalId = setInterval(() => {
       console.log('[Page] 🔄 Refreshing calendar events (5 min interval)...');
       fetchEvents();
-    }, 5 * 60 * 1000);
+    }, FETCH_INTERVAL_MS);
     
     return () => clearInterval(intervalId);
-  }, []);
+  }, []); // Empty dependency array - only runs on mount
 
   // Sequential agent processing: Planning first, then Birthday agent
   // Use ref to track processed event IDs to prevent unnecessary re-runs

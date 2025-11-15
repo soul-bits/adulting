@@ -29,6 +29,17 @@ export async function POST(request: NextRequest) {
       date: event.date instanceof Date ? event.date : new Date(event.date),
     };
 
+    // Check if event is in the future - skip processing for past events
+    const now = new Date();
+    if (eventWithDate.date < now) {
+      console.log(`[Birthday Agent API] ⏭️  Event "${eventWithDate.title}" is in the past (${eventWithDate.date.toISOString()}). Skipping processing.`);
+      return NextResponse.json({
+        success: false,
+        message: 'Event is in the past. Only future events are processed.',
+        processed: false,
+      });
+    }
+
     // Check if this is a birthday event that should be processed
     const shouldProcess = await shouldProcessBirthdayEvent(eventWithDate);
     

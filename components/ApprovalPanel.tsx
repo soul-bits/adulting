@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, CheckCircle2, X, Sparkles, Loader2, Search } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
@@ -21,7 +21,7 @@ export function ApprovalPanel({ events, onBack, onTaskUpdate }: ApprovalPanelPro
   const [loadingRecommendations, setLoadingRecommendations] = useState<Record<string, boolean>>({});
   const [taskSuggestions, setTaskSuggestions] = useState<Record<string, Task['suggestions']>>({});
   const [taskBrowserUseUrls, setTaskBrowserUseUrls] = useState<Record<string, string>>({});
-  const [autoFetchedTasks, setAutoFetchedTasks] = useState<Set<string>>(new Set());
+  const autoFetchInitiatedRef = useRef<Set<string>>(new Set());
   
   const pendingApprovals = events.flatMap(event =>
     event.tasks
@@ -48,7 +48,12 @@ export function ApprovalPanel({ events, onBack, onTaskUpdate }: ApprovalPanelPro
     setLoadingRecommendations(prev => ({ ...prev, [task.id]: true }));
     
     try {
-      const response = await fetch('/api/tasks/recommendations', {
+      // Check if this is a dress order task - use browser-use only for this
+      const taskTitle = task.title.toLowerCase();
+      const useBrowserUse = taskTitle.includes('order dress');
+      
+      const endpoint = useBrowserUse ? '/api/tasks/recommendations' : '/api/tasks/recommendations-openai';
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -75,7 +80,7 @@ export function ApprovalPanel({ events, onBack, onTaskUpdate }: ApprovalPanelPro
             [task.id]: data.suggestions,
           }));
           console.log(`[ApprovalPanel] ✅ Got ${data.suggestions.length} recommendation(s) for task ${task.id}`);
-        } else {
+        } else if (useBrowserUse) {
           console.log(`[ApprovalPanel] ⏳ Browser-use session started, recommendations will be available soon`);
         }
       } else {
@@ -92,21 +97,29 @@ export function ApprovalPanel({ events, onBack, onTaskUpdate }: ApprovalPanelPro
     }
   };
 
-  // Automatically fetch recommendations for all pending approval tasks
+  // Automatically fetch recommendations for dress order tasks ONLY ONCE
   useEffect(() => {
-    const tasksToFetch = pendingApprovals.filter(task => !autoFetchedTasks.has(task.id) && !loadingRecommendations[task.id]);
+    const shouldAutoFetch = (task: any) => {
+      const taskTitle = task.title.toLowerCase();
+      // Only auto-fetch for dress order tasks (using browser-use)
+      return taskTitle.includes('order dress');
+    };
+
+    // Find FIRST dress order task that hasn't been initiated yet
+    const dressOrderTask = pendingApprovals.find(
+      task => !autoFetchInitiatedRef.current.has(task.id) && 
+              !loadingRecommendations[task.id] && 
+              shouldAutoFetch(task)
+    );
     
-    if (tasksToFetch.length > 0) {
-      console.log(`[ApprovalPanel] 🤖 Auto-fetching recommendations for ${tasksToFetch.length} task(s) pending approval`);
+    if (dressOrderTask) {
+      // Mark as initiated IMMEDIATELY to prevent duplicate calls
+      autoFetchInitiatedRef.current.add(dressOrderTask.id);
       
-      // Fetch recommendations for each task
-      tasksToFetch.forEach(task => {
-        console.log(`[ApprovalPanel] Auto-fetching recommendations for task: ${task.id}`);
-        handleGetRecommendations(task);
-        setAutoFetchedTasks(prev => new Set([...prev, task.id]));
-      });
+      console.log(`[ApprovalPanel] 🤖 Auto-fetching browser-use for dress order task: ${dressOrderTask.title}`);
+      handleGetRecommendations(dressOrderTask);
     }
-  }, [pendingApprovals, autoFetchedTasks, loadingRecommendations, handleGetRecommendations]);
+  }, [pendingApprovals]);
 
   const handleApproveAll = () => {
     pendingApprovals.forEach(task => {
