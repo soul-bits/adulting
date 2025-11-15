@@ -23,8 +23,6 @@ export function ApprovalPanel({ events, onBack, onTaskUpdate }: ApprovalPanelPro
   const [taskBrowserUseUrls, setTaskBrowserUseUrls] = useState<Record<string, string>>({});
   const autoFetchInitiatedRef = useRef<Set<string>>(new Set());
   const [selectedEmails, setSelectedEmails] = useState<Record<string, Set<string>>>({});
-  const [selectedVenues, setSelectedVenues] = useState<Record<string, string>>({});
-  const [sendingEmails, setSendingEmails] = useState<Record<string, boolean>>({});
   const [sendingInvitations, setSendingInvitations] = useState<Record<string, boolean>>({});
   
   const pendingApprovals = events.flatMap(event =>
@@ -436,182 +434,35 @@ export function ApprovalPanel({ events, onBack, onTaskUpdate }: ApprovalPanelPro
                       </div>
                     </div>
                   </div>
-                ) : task.title.toLowerCase().includes('book venue') ? (() => {
-                  const taskVenueKey = `${task.id}-venue`;
-                  const selectedVenue = selectedVenues[taskVenueKey] || '';
-                  
-                  const venues = [
-                    {
-                      id: 'chuckecheese',
-                      name: 'Chuck-e-cheese',
-                      phone: '(555) 123-4567',
-                      email: 'info@chuckecheese.com'
-                    },
-                    {
-                      id: 'option2',
-                      name: 'Option 2',
-                      phone: null,
-                      email: 'venue@example.com'
-                    }
-                  ];
-
-                  const handleVenueSelect = (venueId: string) => {
-                    setSelectedVenues(prev => ({
-                      ...prev,
-                      [taskVenueKey]: venueId
-                    }));
-                  };
-
-                  const selectedVenueData = venues.find(v => v.id === selectedVenue);
-                  const canCall = selectedVenueData && selectedVenueData.phone;
-                  const canEmail = selectedVenueData && selectedVenueData.email;
-                  const isSendingEmail = sendingEmails[task.id] || false;
-
-                  const handleSendEmail = async () => {
-                    if (!canEmail || !selectedVenueData) {
-                      return;
-                    }
-
-                    setSendingEmails(prev => ({ ...prev, [task.id]: true }));
-                    try {
-                      const response = await fetch('/api/email/send', {
-                        method: 'POST',
-                        headers: {
-                          'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                          to: selectedVenueData.email,
-                          type: 'venue-inquiry',
-                          venueData: {
-                            name: selectedVenueData.name,
-                          },
-                          eventData: {
-                            title: task.eventTitle,
-                            date: task.eventDate.toISOString(),
-                            location: undefined,
-                            description: `Inquiry for ${task.eventTitle}`,
-                          },
-                        }),
-                      });
-
-                      const data = await response.json();
-
-                      if (!response.ok) {
-                        throw new Error(data.message || 'Failed to send email');
-                      }
-
-                      alert(`Email sent successfully to ${selectedVenueData.email}!`);
-                    } catch (error) {
-                      console.error('Error sending email:', error);
-                      alert(`Failed to send email: ${error instanceof Error ? error.message : 'Unknown error'}`);
-                    } finally {
-                      setSendingEmails(prev => ({ ...prev, [task.id]: false }));
-                    }
-                  };
-
-                  return (
-                    <div className="pt-4 border-t">
-                      <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                        <p className="text-sm font-medium text-gray-700 mb-3">Venue Recommendations:</p>
-                        <div className="space-y-3 mb-4">
-                          {venues.map((venue) => (
-                            <div 
-                              key={venue.id}
-                              className={`p-4 bg-white border rounded-lg cursor-pointer transition-all ${
-                                selectedVenue === venue.id 
-                                  ? 'border-blue-500 bg-blue-50' 
-                                  : 'border-gray-200 hover:border-gray-300'
-                              }`}
-                              onClick={() => handleVenueSelect(venue.id)}
-                            >
-                              <div className="flex items-start gap-3">
-                                <input
-                                  type="radio"
-                                  name={`venue-${task.id}`}
-                                  checked={selectedVenue === venue.id}
-                                  onChange={() => handleVenueSelect(venue.id)}
-                                  className="mt-1 w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-                                />
-                                <div className="flex-1">
-                                  <h4 className="font-medium text-gray-900 mb-2">{venue.name}</h4>
-                                  <div className="space-y-1 text-sm text-gray-600">
-                                    {venue.phone && (
-                                      <div className="flex items-center gap-2">
-                                        <Phone className="h-4 w-4 text-gray-500" />
-                                        <span>{venue.phone}</span>
-                                      </div>
-                                    )}
-                                    <div className="flex items-center gap-2">
-                                      <Mail className="h-4 w-4 text-gray-500" />
-                                      <span>{venue.email}</span>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                        <div className="flex gap-2 mb-4">
-                          {canCall && (
-                            <Button
-                              onClick={() => {
-                                if (selectedVenueData) {
-                                  const phoneNumber = selectedVenueData.phone!.replace(/\D/g, '');
-                                  window.location.href = `tel:+1${phoneNumber}`;
-                                }
-                              }}
-                              className="flex-1 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white"
-                            >
-                              <Phone className="mr-2 h-4 w-4" />
-                              Place a Call
-                            </Button>
-                          )}
-                          {canEmail && (
-                            <Button
-                              onClick={handleSendEmail}
-                              disabled={isSendingEmail}
-                              className="flex-1 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              {isSendingEmail ? (
-                                <>
-                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                  Sending...
-                                </>
-                              ) : (
-                                <>
-                                  <Mail className="mr-2 h-4 w-4" />
-                                  Send Email
-                                </>
-                              )}
-                            </Button>
-                          )}
-                        </div>
-                        {!canCall && !canEmail && selectedVenue && (
-                          <p className="text-sm text-gray-500 text-center mb-4">
-                            Select a venue to contact
-                          </p>
-                        )}
-                        <div className="flex gap-3">
-                          <Button
-                            variant="outline"
-                            onClick={() => onTaskUpdate(task.eventId, task.id, 'issue')}
-                            className="flex-1 border-red-300 text-red-700 hover:bg-red-50"
-                          >
-                            <X className="mr-2 h-4 w-4" />
-                            Reject
-                          </Button>
-                          <Button
-                            onClick={() => onTaskUpdate(task.eventId, task.id, 'approved')}
-                            className="flex-1 bg-green-600 hover:bg-green-700"
-                          >
-                            <CheckCircle2 className="mr-2 h-4 w-4" />
-                            Approve
-                          </Button>
-                        </div>
+                ) : task.title.toLowerCase().includes('book venue') ? (
+                  <div className="pt-4 border-t">
+                    <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                      <div className="flex items-center gap-3 mb-4">
+                        <CheckCircle2 className="h-5 w-5 text-green-600" />
+                        <p className="text-sm font-medium text-green-900">
+                          Venue booked
+                        </p>
+                      </div>
+                      <div className="flex gap-3">
+                        <Button
+                          variant="outline"
+                          onClick={() => onTaskUpdate(task.eventId, task.id, 'issue')}
+                          className="flex-1 border-red-300 text-red-700 hover:bg-red-50"
+                        >
+                          <X className="mr-2 h-4 w-4" />
+                          Reject
+                        </Button>
+                        <Button
+                          onClick={() => onTaskUpdate(task.eventId, task.id, 'approved')}
+                          className="flex-1 bg-green-600 hover:bg-green-700"
+                        >
+                          <CheckCircle2 className="mr-2 h-4 w-4" />
+                          Approve
+                        </Button>
                       </div>
                     </div>
-                  );
-                })() : (
+                  </div>
+                ) : (
                   <div className="flex gap-3 pt-4 border-t">
                     <Button
                       variant="outline"
