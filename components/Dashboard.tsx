@@ -247,6 +247,18 @@ export function Dashboard({
                         >
                           {event.status}
                         </Badge>
+                        {event.planningStatus === 'planning' && (
+                          <Badge className="bg-blue-100 text-blue-700 border-blue-300">
+                            <Sparkles className="h-3 w-3 mr-1 animate-pulse" />
+                            Planning...
+                          </Badge>
+                        )}
+                        {event.planningStatus === 'error' && (
+                          <Badge className="bg-red-100 text-red-700 border-red-300">
+                            <AlertCircle className="h-3 w-3 mr-1" />
+                            Planning Error
+                          </Badge>
+                        )}
                       </div>
                       <div className="flex items-center gap-4 text-sm text-gray-600">
                         <span className="flex items-center gap-1">

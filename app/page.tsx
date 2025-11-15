@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Dashboard } from '@/components/Dashboard';
 import { EventWorkflow } from '@/components/EventWorkflow';
 import { TaskTracking } from '@/components/TaskTracking';
@@ -76,12 +76,63 @@ export default function Home() {
   }, []);
 
   // Sequential agent processing: Planning first, then Birthday agent
+  // Use ref to track processed event IDs to prevent unnecessary re-runs
+  const processedEventIdsRef = useRef<Set<string>>(new Set());
+  const lastEventIdsRef = useRef<Set<string>>(new Set());
+  
   useEffect(() => {
+    console.log('[Page] 🔍 Agent processing effect triggered:', { loading, eventsCount: events.length });
+    
+    // Only process when loading completes and we have events
+    if (loading) {
+      console.log('[Page] ⏸️  Still loading, skipping agent processing');
+      return;
+    }
+    
+    if (events.length === 0) {
+      console.log('[Page] ⏸️  No events yet, skipping agent processing');
+      return;
+    }
+
+    console.log('[Page] ✅ Conditions met - will process agents for', events.length, 'event(s)');
+
     async function processAgentsSequentially() {
-      // Only process if events are loaded and not loading
-      if (loading || events.length === 0) {
+      // Get current event IDs
+      const currentEventIds = new Set(events.map(e => e.id));
+      
+      // Detect NEW events (events that weren't in the last set)
+      const newEventIds = Array.from(currentEventIds).filter(id => !lastEventIdsRef.current.has(id));
+      
+      // Check if this is just a task update (same event IDs, but events have tasks now)
+      const isTaskUpdate = newEventIds.length === 0 && 
+                           currentEventIds.size === lastEventIdsRef.current.size &&
+                           currentEventIds.size > 0 &&
+                           Array.from(currentEventIds).every(id => lastEventIdsRef.current.has(id));
+      
+      // If this is just a task update and all events are processed, skip to avoid re-processing
+      if (isTaskUpdate && Array.from(currentEventIds).every(id => processedEventIdsRef.current.has(id))) {
+        console.log('[Page] ⏭️  Events updated with tasks, but all already processed - skipping');
         return;
       }
+      
+      // If no new events and all events are already processed, skip
+      if (newEventIds.length === 0 && currentEventIds.size > 0 && Array.from(currentEventIds).every(id => processedEventIdsRef.current.has(id))) {
+        console.log('[Page] ⏭️  No new events to process, all events already processed');
+        // Update last seen event IDs even if skipping
+        lastEventIdsRef.current = currentEventIds;
+        return;
+      }
+      
+      // Log new events detected
+      if (newEventIds.length > 0) {
+        console.log(`[Page] 🎯 Detected ${newEventIds.length} new event(s) - will check for birthdays:`, newEventIds);
+      } else if (currentEventIds.size > 0) {
+        console.log(`[Page] 🔄 Checking ${currentEventIds.size} existing event(s) for unprocessed birthdays`);
+      }
+      
+      // Update last seen event IDs AFTER we've determined we need to process
+      // This prevents race conditions where events update before processing completes
+      lastEventIdsRef.current = currentEventIds;
 
       console.log('[Page] 🤖 Starting sequential agent processing...');
 
@@ -92,11 +143,25 @@ export default function Home() {
       const updatedEvents = new Map<string, EventType>();
       events.forEach((event: EventType) => updatedEvents.set(event.id, event));
 
-      for (const event of events) {
+      // Process events - prioritize new events, but also check existing events that haven't been processed
+      const eventsToProcess = events.filter(event => {
+        // Process if it's a new event OR if it hasn't been processed yet
+        return newEventIds.includes(event.id) || !processedEventIdsRef.current.has(event.id);
+      });
+
+      for (const event of eventsToProcess) {
         try {
           // CRITICAL: Skip if event already has tasks - do NOT modify existing tasks
           if (event.tasks && event.tasks.length > 0) {
             console.log(`[Page] ⏭️  Planning: Event "${event.title}" already has ${event.tasks.length} task(s), skipping`);
+            // Mark as processed even if it has tasks (to avoid re-checking)
+            processedEventIdsRef.current.add(event.id);
+            continue;
+          }
+
+          // Skip if already processed (double-check)
+          if (processedEventIdsRef.current.has(event.id)) {
+            console.log(`[Page] ⏭️  Planning: Event "${event.title}" already processed, skipping`);
             continue;
           }
 
@@ -108,10 +173,19 @@ export default function Home() {
 
           if (!mightBeBirthday) {
             console.log(`[Page] ⏭️  Planning: Event "${event.title}" doesn't appear to be a birthday, skipping`);
+            // Mark non-birthday events as processed to avoid re-checking
+            processedEventIdsRef.current.add(event.id);
             continue;
           }
 
           console.log(`[Page] 🎯 Planning: Processing "${event.title}"`);
+          
+          // Set planning status to 'planning'
+          setEvents((prevEvents: EventType[]) =>
+            prevEvents.map((e: EventType) =>
+              e.id === event.id ? { ...e, planningStatus: 'planning' as const } : e
+            )
+          );
           
           // Call planning API route (will verify it's a birthday event)
           const response = await fetch('/api/events/plan', {
@@ -125,10 +199,14 @@ export default function Home() {
           const data = await response.json();
 
           if (data.success && data.tasks && data.tasks.length > 0) {
+            // Mark as processed
+            processedEventIdsRef.current.add(event.id);
+            
             // Update local tracking with new tasks
             const updatedEvent = {
               ...event,
-              tasks: [...(event.tasks || []), ...data.tasks]
+              tasks: [...(event.tasks || []), ...data.tasks],
+              planningStatus: 'completed' as const
             };
             updatedEvents.set(event.id, updatedEvent);
 
@@ -139,7 +217,7 @@ export default function Home() {
                   // Double-check: don't modify if tasks already exist
                   if (e.tasks && e.tasks.length > 0) {
                     console.log(`[Page] ⚠️  Planning: Event "${event.title}" already has tasks, not modifying`);
-                    return e;
+                    return { ...e, planningStatus: 'completed' as const };
                   }
                   return updatedEvent;
                 }
@@ -148,14 +226,39 @@ export default function Home() {
             );
             console.log(`[Page] ✅ Planning: Generated ${data.tasks.length} task(s) for "${event.title}"`);
           } else if (data.alreadyPlanned) {
+            processedEventIdsRef.current.add(event.id);
+            // Update planning status to completed
+            setEvents((prevEvents: EventType[]) =>
+              prevEvents.map((e: EventType) =>
+                e.id === event.id ? { ...e, planningStatus: 'completed' as const } : e
+              )
+            );
             console.log(`[Page] ⏭️  Planning: Event "${event.title}" already planned`);
           } else if (data.skipped) {
+            // Mark as completed (not a birthday, so planning is done)
+            setEvents((prevEvents: EventType[]) =>
+              prevEvents.map((e: EventType) =>
+                e.id === event.id ? { ...e, planningStatus: 'completed' as const } : e
+              )
+            );
             console.log(`[Page] ⏭️  Planning: Event "${event.title}" is ${data.eventType}, not birthday - skipped`);
           } else {
+            // Mark as error
+            setEvents((prevEvents: EventType[]) =>
+              prevEvents.map((e: EventType) =>
+                e.id === event.id ? { ...e, planningStatus: 'error' as const } : e
+              )
+            );
             console.log(`[Page] ⚠️  Planning: No tasks generated for "${event.title}": ${data.message || 'Unknown reason'}`);
           }
         } catch (error) {
           console.error(`[Page] ❌ Planning: Error planning event "${event.title}":`, error);
+          // Mark as error on exception
+          setEvents((prevEvents: EventType[]) =>
+            prevEvents.map((e: EventType) =>
+              e.id === event.id ? { ...e, planningStatus: 'error' as const } : e
+            )
+          );
         }
       }
 
@@ -234,13 +337,14 @@ export default function Home() {
       console.log('[Page] ✅ Sequential agent processing complete');
     }
 
-    // Trigger sequential processing after events are loaded
+    // Trigger processing after a short delay when loading completes
+    // This ensures new birthday events are detected and processed when they appear in the UI
     const timer = setTimeout(() => {
       processAgentsSequentially();
     }, 1000);
 
     return () => clearTimeout(timer);
-  }, [events, loading]);
+  }, [loading, events]); // Depend on events array to detect when new events are added (like birthdays from calendar fetch)
 
   const handleEventSelect = (event: EventType) => {
     setSelectedEvent(event);

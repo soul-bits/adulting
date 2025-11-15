@@ -17,6 +17,7 @@ export type EventType = {
   participants?: string[];
   status: 'pending' | 'in-progress' | 'completed';
   tasks: Task[];
+  planningStatus?: 'idle' | 'planning' | 'completed' | 'error';
 };
 
 /**

@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, MapPin, Users, Calendar, Sparkles, ShoppingCart, Mail, Package, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
+import { ArrowLeft, MapPin, Users, Calendar, Sparkles, ShoppingCart, Mail, Package, CheckCircle2, Clock, AlertCircle, Loader2 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
@@ -80,8 +80,45 @@ export function EventWorkflow({ event, onBack, onTaskUpdate, onChatOpen }: Event
           </Button>
 
           <div className="flex items-start justify-between">
-            <div>
-              <h1 className="text-3xl mb-2">{event.title}</h1>
+            <div className="flex-1">
+              <div className="flex items-center gap-3 mb-2 flex-wrap">
+                <h1 className="text-3xl">{event.title}</h1>
+                <Badge
+                  className={
+                    event.type === 'birthday'
+                      ? 'bg-pink-100 text-pink-700'
+                      : event.type === 'meeting'
+                      ? 'bg-blue-100 text-blue-700'
+                      : event.type === 'conference'
+                      ? 'bg-purple-100 text-purple-700'
+                      : event.type === 'dinner'
+                      ? 'bg-orange-100 text-orange-700'
+                      : event.type === 'travel'
+                      ? 'bg-teal-100 text-teal-700'
+                      : 'bg-gray-100 text-gray-700'
+                  }
+                >
+                  {event.type}
+                </Badge>
+                {event.planningStatus === 'planning' && (
+                  <Badge className="bg-blue-100 text-blue-700 border-blue-300">
+                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                    Planning in progress...
+                  </Badge>
+                )}
+                {event.planningStatus === 'completed' && event.tasks.length === 0 && (
+                  <Badge className="bg-green-100 text-green-700 border-green-300">
+                    <CheckCircle2 className="h-3 w-3 mr-1" />
+                    Planning complete
+                  </Badge>
+                )}
+                {event.planningStatus === 'error' && (
+                  <Badge className="bg-red-100 text-red-700 border-red-300">
+                    <AlertCircle className="h-3 w-3 mr-1" />
+                    Planning failed
+                  </Badge>
+                )}
+              </div>
               <div className="flex items-center gap-4 text-gray-600">
                 <span className="flex items-center gap-1">
                   <Calendar className="h-4 w-4" />
@@ -108,15 +145,41 @@ export function EventWorkflow({ event, onBack, onTaskUpdate, onChatOpen }: Event
                 )}
               </div>
             </div>
-            <Button
-              onClick={onChatOpen}
-              className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
-            >
-              <Sparkles className="mr-2 h-4 w-4" />
-              Ask Alfred
-            </Button>
+            <div className="flex flex-col items-end gap-2">
+              <Badge
+                className={
+                  event.status === 'completed'
+                    ? 'bg-green-100 text-green-700'
+                    : event.status === 'in-progress'
+                    ? 'bg-yellow-100 text-yellow-700'
+                    : 'bg-gray-100 text-gray-700'
+                }
+              >
+                {event.status}
+              </Badge>
+              <Button
+                onClick={onChatOpen}
+                className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700"
+              >
+                <Sparkles className="mr-2 h-4 w-4" />
+                Ask Alfred
+              </Button>
+            </div>
           </div>
         </div>
+
+        {/* Planning Status */}
+        {event.planningStatus === 'planning' && (
+          <Card className="p-6 mb-6 border-blue-200 bg-blue-50">
+            <div className="flex items-center gap-3">
+              <Loader2 className="h-5 w-5 text-blue-600 animate-spin" />
+              <div>
+                <h3 className="font-medium text-blue-900">Planning in Progress</h3>
+                <p className="text-sm text-blue-700">AI is analyzing this event and generating tasks...</p>
+              </div>
+            </div>
+          </Card>
+        )}
 
         {/* Progress Bar */}
         <Card className="p-6 mb-6">
@@ -126,19 +189,48 @@ export function EventWorkflow({ event, onBack, onTaskUpdate, onChatOpen }: Event
               {event.tasks.filter(t => t.status === 'completed').length} / {event.tasks.length} tasks completed
             </span>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-3">
-            <div
-              className="bg-gradient-to-r from-green-500 to-emerald-500 h-3 rounded-full transition-all"
-              style={{
-                width: `${(event.tasks.filter(t => t.status === 'completed').length / event.tasks.length) * 100}%`
-              }}
-            />
-          </div>
+          {event.tasks.length > 0 ? (
+            <div className="w-full bg-gray-200 rounded-full h-3">
+              <div
+                className="bg-gradient-to-r from-green-500 to-emerald-500 h-3 rounded-full transition-all"
+                style={{
+                  width: `${Math.min((event.tasks.filter(t => t.status === 'completed').length / event.tasks.length) * 100, 100)}%`
+                }}
+              />
+            </div>
+          ) : (
+            <div className="w-full bg-gray-200 rounded-full h-3">
+              <div className="bg-gray-300 h-3 rounded-full" style={{ width: '0%' }} />
+            </div>
+          )}
         </Card>
 
         {/* Task Categories */}
-        <div className="space-y-6">
-          {Object.entries(groupedTasks).map(([category, tasks]) => (
+        {Object.keys(groupedTasks).length === 0 ? (
+          <Card className="p-12 text-center">
+            {event.planningStatus === 'planning' ? (
+              <div className="flex flex-col items-center gap-3">
+                <Loader2 className="h-12 w-12 text-blue-500 animate-spin" />
+                <h3 className="text-lg font-medium text-gray-900">Planning in Progress</h3>
+                <p className="text-sm text-gray-600">Tasks will appear here once planning is complete.</p>
+              </div>
+            ) : event.planningStatus === 'error' ? (
+              <div className="flex flex-col items-center gap-3">
+                <AlertCircle className="h-12 w-12 text-red-500" />
+                <h3 className="text-lg font-medium text-gray-900">Planning Failed</h3>
+                <p className="text-sm text-gray-600">Unable to generate tasks for this event.</p>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-3">
+                <Package className="h-12 w-12 text-gray-400" />
+                <h3 className="text-lg font-medium text-gray-900">No Tasks Yet</h3>
+                <p className="text-sm text-gray-600">Tasks will be generated automatically for birthday events.</p>
+              </div>
+            )}
+          </Card>
+        ) : (
+          <div className="space-y-6">
+            {Object.entries(groupedTasks).map(([category, tasks]) => (
             <Card key={category} className="p-6">
               <div className="flex items-center gap-2 mb-4">
                 {getCategoryIcon(category as Task['category'])}
@@ -247,8 +339,9 @@ export function EventWorkflow({ event, onBack, onTaskUpdate, onChatOpen }: Event
                 ))}
               </div>
             </Card>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
         {/* Alfred's Recommendations */}
         <Card className="mt-6 p-6 bg-gradient-to-br from-indigo-50 to-purple-50 border-indigo-200">
