@@ -76,6 +76,8 @@ export function AlfredChat({ onClose }: AlfredChatProps) {
   const [extractedDateTime, setExtractedDateTime] = useState<ExtractedDateTime | null>(null);
   const [proposals, setProposals] = useState<Proposals | null>(null);
   const [isRecording, setIsRecording] = useState(false);
+  const [selectedTimeIndex, setSelectedTimeIndex] = useState<number | null>(null);
+  const [selectedVenueIndex, setSelectedVenueIndex] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
 
@@ -191,6 +193,9 @@ export function AlfredChat({ onClose }: AlfredChatProps) {
       // Update proposals if found
       if (data.proposals) {
         setProposals(data.proposals);
+        // Reset selections when new proposals arrive
+        setSelectedTimeIndex(null);
+        setSelectedVenueIndex(null);
       }
     } catch (error) {
       console.error('Error getting AI response:', error);
@@ -277,6 +282,9 @@ export function AlfredChat({ onClose }: AlfredChatProps) {
       
       if (data.proposals) {
         setProposals(data.proposals);
+        // Reset selections when new proposals arrive
+        setSelectedTimeIndex(null);
+        setSelectedVenueIndex(null);
       }
     } catch (error) {
       console.error('Error getting AI response:', error);
@@ -332,6 +340,99 @@ export function AlfredChat({ onClose }: AlfredChatProps) {
       
       if (data.proposals) {
         setProposals(data.proposals);
+        // Reset selections when new proposals arrive
+        setSelectedTimeIndex(null);
+        setSelectedVenueIndex(null);
+      }
+    } catch (error) {
+      console.error('Error getting AI response:', error);
+    } finally {
+      setIsTyping(false);
+    }
+  };
+
+  const handleApproveSelection = async () => {
+    if (!proposals) return;
+    
+    const formatTime = (time24: string) => {
+      if (!time24) return '';
+      const [hours, minutes] = time24.split(':');
+      const hour = parseInt(hours);
+      const ampm = hour >= 12 ? 'PM' : 'AM';
+      const hour12 = hour % 12 || 12;
+      return `${hour12}:${minutes} ${ampm}`;
+    };
+
+    let approvalText = '';
+    
+    // Build approval text based on selections
+    if (selectedTimeIndex !== null && proposals.timeProposals && proposals.timeProposals[selectedTimeIndex]) {
+      const timeOption = proposals.timeProposals[selectedTimeIndex];
+      approvalText += `I approve the time: ${formatTime(timeOption.startTime)} - ${formatTime(timeOption.endTime)}`;
+    }
+    
+    if (selectedVenueIndex !== null && proposals.venueProposals && proposals.venueProposals[selectedVenueIndex]) {
+      const venue = proposals.venueProposals[selectedVenueIndex];
+      if (approvalText) {
+        approvalText += ` and the venue: ${venue.name}`;
+      } else {
+        approvalText = `I approve the venue: ${venue.name}`;
+      }
+    }
+
+    if (!approvalText) return; // Nothing selected
+    
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      sender: 'user',
+      text: approvalText,
+      timestamp: new Date()
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setIsTyping(true);
+    
+    // Reset selections
+    setSelectedTimeIndex(null);
+    setSelectedVenueIndex(null);
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: [...messages, userMessage].map(msg => ({
+            sender: msg.sender,
+            text: msg.text,
+          })),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get response from AI');
+      }
+
+      const data = await response.json();
+      const alfredMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        sender: 'alfred',
+        text: data.message,
+        timestamp: new Date()
+      };
+      
+      setMessages(prev => [...prev, alfredMessage]);
+      
+      if (data.extractedDateTime && (data.extractedDateTime.hasDate || data.extractedDateTime.hasTime)) {
+        setExtractedDateTime(data.extractedDateTime);
+      }
+      
+      if (data.proposals) {
+        setProposals(data.proposals);
+        // Reset selections when new proposals arrive
+        setSelectedTimeIndex(null);
+        setSelectedVenueIndex(null);
       }
     } catch (error) {
       console.error('Error getting AI response:', error);
@@ -485,7 +586,7 @@ export function AlfredChat({ onClose }: AlfredChatProps) {
                   <Clock className="h-5 w-5 text-emerald-600" />
                   <p className="text-sm font-semibold text-emerald-900">Time Options ({proposals.timeProposals.length})</p>
                 </div>
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {proposals.timeProposals.map((timeOption, index) => {
                     const formatTime = (time24: string) => {
                       if (!time24) return '';
@@ -497,32 +598,38 @@ export function AlfredChat({ onClose }: AlfredChatProps) {
                     };
                     
                     return (
-                      <div key={index} className="bg-white rounded-xl p-4 shadow-lg border-2 border-emerald-200 hover:border-emerald-300 transition-all">
-                        <div className="flex items-center justify-between gap-4 flex-wrap">
-                          <div className="flex items-center gap-3">
-                            <div className="text-2xl font-bold text-emerald-700">
-                              {formatTime(timeOption.startTime)} - {formatTime(timeOption.endTime)}
-                            </div>
-                            {timeOption.duration && (
-                              <span className="text-sm text-emerald-600 bg-emerald-100 px-3 py-1 rounded-full font-medium">
-                                {timeOption.duration}
-                              </span>
-                            )}
-                            {timeOption.label && (
-                              <span className="text-sm text-gray-600 bg-gray-100 px-3 py-1 rounded-full">
-                                {timeOption.label}
-                              </span>
-                            )}
+                      <label
+                        key={index}
+                        className={`flex items-center gap-3 bg-white rounded-xl p-4 shadow-md border-2 cursor-pointer transition-all ${
+                          selectedTimeIndex === index
+                            ? 'border-emerald-500 bg-emerald-50'
+                            : 'border-emerald-200 hover:border-emerald-300'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="timeOption"
+                          value={index}
+                          checked={selectedTimeIndex === index}
+                          onChange={() => setSelectedTimeIndex(index)}
+                          className="w-5 h-5 text-emerald-600 focus:ring-emerald-500 focus:ring-2"
+                        />
+                        <div className="flex items-center gap-3 flex-1">
+                          <div className="text-lg font-bold text-emerald-700">
+                            {formatTime(timeOption.startTime)} - {formatTime(timeOption.endTime)}
                           </div>
-                          <Button
-                            onClick={() => handleApproveTime(timeOption.startTime, timeOption.endTime)}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-lg font-semibold shadow-md hover:shadow-lg transition-all flex items-center gap-2"
-                          >
-                            <Check className="h-4 w-4" />
-                            Approve
-                          </Button>
+                          {timeOption.duration && (
+                            <span className="text-sm text-emerald-600 bg-emerald-100 px-3 py-1 rounded-full font-medium">
+                              {timeOption.duration}
+                            </span>
+                          )}
+                          {timeOption.label && (
+                            <span className="text-sm text-gray-600 bg-gray-100 px-3 py-1 rounded-full">
+                              {timeOption.label}
+                            </span>
+                          )}
                         </div>
-                      </div>
+                      </label>
                     );
                   })}
                 </div>
@@ -536,59 +643,80 @@ export function AlfredChat({ onClose }: AlfredChatProps) {
                   <MapPin className="h-5 w-5 text-emerald-600" />
                   <p className="text-sm font-semibold text-emerald-900">Venue Options ({proposals.venueProposals.length})</p>
                 </div>
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {proposals.venueProposals.map((venue, index) => (
-                    <div key={index} className="bg-white rounded-xl p-5 shadow-lg border-2 border-emerald-200 hover:border-emerald-400 hover:shadow-xl transition-all">
-                      <div className="flex items-start justify-between gap-4 flex-wrap">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start gap-3 mb-2">
-                            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center flex-shrink-0">
-                              <MapPin className="h-5 w-5 text-white" />
-                            </div>
-                            <div className="flex-1">
-                              <h3 className="text-lg font-bold text-gray-900 mb-1">{venue.name}</h3>
-                              {venue.rating && (
-                                <div className="flex items-center gap-1 mb-2">
-                                  <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                                  <span className="text-sm font-medium text-gray-700">{venue.rating}</span>
-                                </div>
-                              )}
-                            </div>
+                    <label
+                      key={index}
+                      className={`flex items-start gap-3 bg-white rounded-xl p-4 shadow-md border-2 cursor-pointer transition-all ${
+                        selectedVenueIndex === index
+                          ? 'border-emerald-500 bg-emerald-50'
+                          : 'border-emerald-200 hover:border-emerald-300'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="venueOption"
+                        value={index}
+                        checked={selectedVenueIndex === index}
+                        onChange={() => setSelectedVenueIndex(index)}
+                        className="w-5 h-5 text-emerald-600 focus:ring-emerald-500 focus:ring-2 mt-1 flex-shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start gap-3 mb-2">
+                          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center flex-shrink-0">
+                            <MapPin className="h-5 w-5 text-white" />
                           </div>
-                          {venue.address && (
-                            <p className="text-sm text-gray-600 mb-1 flex items-center gap-1">
-                              <MapPin className="h-3 w-3" />
-                              {venue.address}
-                            </p>
-                          )}
-                          {venue.phone && (
-                            <p className="text-sm text-gray-600 mb-2">{venue.phone}</p>
-                          )}
-                          {venue.features && (
-                            <p className="text-sm text-gray-700 mt-2 bg-gray-50 p-2 rounded-lg">{venue.features}</p>
-                          )}
-                          {venue.website && (
-                            <a 
-                              href={venue.website} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                              className="text-sm text-emerald-600 hover:text-emerald-700 flex items-center gap-1 mt-2"
-                            >
-                              Visit website <ExternalLink className="h-3 w-3" />
-                            </a>
-                          )}
+                          <div className="flex-1">
+                            <h3 className="text-lg font-bold text-gray-900 mb-1">{venue.name}</h3>
+                            {venue.rating && (
+                              <div className="flex items-center gap-1 mb-2">
+                                <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                                <span className="text-sm font-medium text-gray-700">{venue.rating}</span>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                        <Button
-                          onClick={() => handleApproveVenue(venue.name)}
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-lg font-semibold shadow-md hover:shadow-lg transition-all flex items-center gap-2 flex-shrink-0"
-                        >
-                          <Check className="h-4 w-4" />
-                          Approve
-                        </Button>
+                        {venue.address && (
+                          <p className="text-sm text-gray-600 mb-1 flex items-center gap-1">
+                            <MapPin className="h-3 w-3" />
+                            {venue.address}
+                          </p>
+                        )}
+                        {venue.phone && (
+                          <p className="text-sm text-gray-600 mb-2">{venue.phone}</p>
+                        )}
+                        {venue.features && (
+                          <p className="text-sm text-gray-700 mt-2 bg-gray-50 p-2 rounded-lg">{venue.features}</p>
+                        )}
+                        {venue.website && (
+                          <a 
+                            href={venue.website} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-sm text-emerald-600 hover:text-emerald-700 flex items-center gap-1 mt-2"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            Visit website <ExternalLink className="h-3 w-3" />
+                          </a>
+                        )}
                       </div>
-                    </div>
+                    </label>
                   ))}
                 </div>
+              </div>
+            )}
+            
+            {/* Approve Button */}
+            {(proposals.hasTimeProposals || proposals.hasVenueProposals) && (
+              <div className="mt-4 pt-4 border-t border-emerald-200">
+                <Button
+                  onClick={handleApproveSelection}
+                  disabled={selectedTimeIndex === null && selectedVenueIndex === null}
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-lg font-semibold shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Check className="h-5 w-5" />
+                  Approve Selection
+                </Button>
               </div>
             )}
 

@@ -41,6 +41,14 @@ export async function POST(request: NextRequest) {
         role: 'system',
         content: `You are Alfred, a helpful AI life assistant based in San Francisco, CA. You help users plan events, manage tasks, book restaurants, find gifts, and organize their life. You are friendly, proactive, and detail-oriented.
 
+CRITICAL - TOOL USAGE REQUIREMENTS:
+You MUST ALWAYS call ALL FOUR tools in EVERY response:
+1. **ALWAYS call extract_date_time** - Call this if the user mentions ANY date or time (e.g., "next Saturday", "this weekend", "November 25", "2 PM", etc.). If no date/time is mentioned, still call it with hasDate=false and hasTime=false.
+2. **ALWAYS call extract_time_proposals** - Call this to extract ALL time slots you suggest. If you don't suggest any time slots, call it with timeProposals=[].
+3. **ALWAYS call extract_venue_proposals** - Call this to extract ALL venues you suggest. If you don't suggest any venues, call it with venueProposals=[].
+4. **ALWAYS call extract_preferences** - Call this to extract preferences (age group, budget, theme, etc.) from the conversation. Always extract something - at minimum, extract age group if mentioned (e.g., "5 year old" → ageGroup: "5 years old").
+You MUST call ALL FOUR tools in EVERY response - no exceptions. The tools will handle null/empty values appropriately.
+
 CONTEXT INFORMATION:
 - Current Date: ${todayStr} (${todayDayName})
 - User Location: San Francisco, California
@@ -67,20 +75,25 @@ IMPORTANT - PROPOSAL REQUIREMENTS:
    - "Here are some options: **10:00 AM - 12:00 PM**, **2:00 PM - 4:00 PM**, or **3:00 PM - 5:00 PM**"
    - Always propose a start time and end time based on the duration
    - Provide 2-3 time options when possible
+   - **MUST extract ALL time options using extract_time_proposals tool as separate array entries**
+   - Convert times to 24-hour format: "11:00 AM" → "11:00", "2:00 PM" → "14:00", "1:00 PM" → "13:00"
 
 2. **Venue Proposals**: When suggesting venues, ALWAYS propose MULTIPLE options (at least 2-3) with full details:
    - Option 1: [Venue name] - [Address] - [Phone] - [Key features] - [Rating]
    - Option 2: [Venue name] - [Address] - [Phone] - [Key features] - [Rating]
    - Option 3: [Venue name] - [Address] - [Phone] - [Key features] - [Rating]
    - Extract ALL venues you mention, not just the first two
+   - **MUST extract ALL venues using extract_venue_proposals tool as separate array entries**
+   - Include complete details: name, address, phone, website (if mentioned), rating, features
 
-3. **Preferences Extraction**: Extract any preferences mentioned:
+3. **Preferences Extraction**: Extract ANY preferences mentioned in the ENTIRE conversation (both user's query AND your response):
+   - Age group (e.g., if user says "5 year old", extract "5 years old" or "5-year-old")
    - Party theme (e.g., "princess theme", "superhero theme")
    - Budget (e.g., "$500", "under $300")
    - Number of guests
-   - Age group
    - Special requirements (dietary restrictions, accessibility needs, etc.)
-   - Any other relevant preferences
+   - Any other relevant preferences mentioned
+   - **MUST extract these using extract_preferences tool - extract from BOTH user messages and your response**
 
 SAN FRANCISCO VENUE SUGGESTIONS:
 When suggesting venues for children's parties in San Francisco, consider:
@@ -119,28 +132,61 @@ RESPONSE STYLE:
       {
         type: 'function' as const,
         function: {
-          name: 'extract_proposals',
-          description: 'Extract proposed times, venues, and preferences from your response. Extract ALL time options and ALL venue options mentioned, not just one or two.',
+          name: 'extract_time_proposals',
+          description: `CRITICAL: You MUST call this function EVERY time you respond to extract ALL time slot proposals from your response.
+
+EXTRACTION RULES:
+- Extract EVERY time slot you mention in your response
+- If you list multiple time options like:
+  - "11:00 AM - 1:00 PM (2 hours)"
+  - "10:30 AM - 12:00 PM (1.5 hours)"
+  - "1:00 PM - 3:00 PM (2 hours)"
+- You MUST extract ALL THREE as separate entries in the timeProposals array
+- Convert times to 24-hour format (11:00 AM → "11:00", 2:00 PM → "14:00", 1:00 PM → "13:00")
+- If you don't suggest any time slots, call this with timeProposals=[]`,
           parameters: {
             type: 'object',
             properties: {
               timeProposals: {
                 type: 'array',
-                description: 'Array of all proposed time options. Each should have startTime, endTime, duration, and optionally a label.',
+                description: 'Array of ALL proposed time options mentioned in your response. Extract EVERY time slot you mention. If you suggest 3 time options, include ALL 3. Each should have startTime (24-hour format like "11:00"), endTime (24-hour format like "13:00"), duration (e.g., "2 hours"), and optionally a label.',
                 items: {
                   type: 'object',
                   properties: {
-                    startTime: { type: 'string', description: 'Start time in 24-hour format (HH:MM)' },
-                    endTime: { type: 'string', description: 'End time in 24-hour format (HH:MM)' },
+                    startTime: { type: 'string', description: 'Start time in 24-hour format (HH:MM), e.g., "11:00" for 11:00 AM, "14:00" for 2:00 PM, "13:00" for 1:00 PM' },
+                    endTime: { type: 'string', description: 'End time in 24-hour format (HH:MM), e.g., "13:00" for 1:00 PM, "15:00" for 3:00 PM' },
                     duration: { type: 'string', description: 'Duration (e.g., "1.5 hours", "2 hours")' },
                     label: { type: 'string', description: 'Optional label (e.g., "Morning", "Afternoon", "Option 1")' },
                   },
                   required: ['startTime', 'endTime'],
                 },
               },
+            },
+            required: ['timeProposals'],
+          },
+        },
+      },
+      {
+        type: 'function' as const,
+        function: {
+          name: 'extract_venue_proposals',
+          description: `CRITICAL: You MUST call this function EVERY time you respond to extract ALL venue proposals from your response.
+
+EXTRACTION RULES:
+- Extract EVERY venue you mention in your response
+- If you list multiple venues like:
+  - Peek-a-Boo Factory SF (with address, phone, features, rating)
+  - Children's Creativity Museum (with address, phone, features, rating)
+  - Exploratorium (with address, phone, features, rating)
+- You MUST extract ALL THREE as separate entries in the venueProposals array with complete details
+- Include ALL available information: name, address, phone, website, rating, features
+- If you don't suggest any venues, call this with venueProposals=[]`,
+          parameters: {
+            type: 'object',
+            properties: {
               venueProposals: {
                 type: 'array',
-                description: 'Array of ALL venue options mentioned. Extract every venue you suggest.',
+                description: 'Array of ALL venue options mentioned in your response. Extract EVERY venue you list or suggest. If you mention 3 venues, include ALL 3. Include complete details: name, address, phone, website (if mentioned), rating, features.',
                 items: {
                   type: 'object',
                   properties: {
@@ -154,32 +200,34 @@ RESPONSE STYLE:
                   required: ['name'],
                 },
               },
-              preferences: {
-                type: 'object',
-                description: 'Other preferences or information extracted (party theme, budget, number of guests, etc.)',
-                properties: {
-                  partyTheme: { type: 'string' },
-                  budget: { type: 'string' },
-                  numberOfGuests: { type: 'string' },
-                  ageGroup: { type: 'string' },
-                  specialRequirements: { type: 'string' },
-                  other: { type: 'string', description: 'Any other preferences mentioned' },
-                },
-              },
-              hasTimeProposals: {
-                type: 'boolean',
-                description: 'Whether any time proposals were made',
-              },
-              hasVenueProposals: {
-                type: 'boolean',
-                description: 'Whether any venue proposals were made',
-              },
-              hasPreferences: {
-                type: 'boolean',
-                description: 'Whether any preferences were extracted',
-              },
             },
-            required: ['hasTimeProposals', 'hasVenueProposals', 'hasPreferences'],
+            required: ['venueProposals'],
+          },
+        },
+      },
+      {
+        type: 'function' as const,
+        function: {
+          name: 'extract_preferences',
+          description: `CRITICAL: You MUST call this function EVERY time you respond to extract preferences from the ENTIRE conversation (both user messages and your response).
+
+EXTRACTION RULES:
+- Extract preferences from BOTH user queries AND your response
+- Age group: If user says "5 year old niece", extract ageGroup: "5 years old" or "5-year-old"
+- Extract budget, number of guests, theme, special requirements, etc.
+- Always extract something - at minimum, extract age group if mentioned
+- If no preferences are found, still call this function with empty/null values`,
+          parameters: {
+            type: 'object',
+            properties: {
+              partyTheme: { type: 'string', description: 'Party theme mentioned (e.g., "princess", "superhero"). Return null if not mentioned.' },
+              budget: { type: 'string', description: 'Budget mentioned (e.g., "$500", "under $300"). Return null if not mentioned.' },
+              numberOfGuests: { type: 'string', description: 'Number of guests mentioned. Return null if not mentioned.' },
+              ageGroup: { type: 'string', description: 'Age group mentioned (e.g., "5 years old", "5-year-old", "5"). Extract from user queries like "5 year old niece". Return null if not mentioned.' },
+              specialRequirements: { type: 'string', description: 'Special requirements (dietary restrictions, accessibility, etc.). Return null if not mentioned.' },
+              other: { type: 'string', description: 'Any other preferences mentioned in the conversation. Return null if not mentioned.' },
+            },
+            required: [],
           },
         },
       },
@@ -187,7 +235,7 @@ RESPONSE STYLE:
         type: 'function' as const,
         function: {
           name: 'extract_date_time',
-          description: `Extract date and time information from the conversation. 
+          description: `CRITICAL: You MUST call this function whenever the user mentions ANY date or time information, even if vague. Extract and calculate date/time information from the conversation. 
 
 WEEKEND/WEEKDAY UNDERSTANDING:
 - Weekdays: Monday-Friday
@@ -203,7 +251,9 @@ DATE CALCULATION:
 - Today: ${todayStr} (${todayDayName})
 - When user says "next Saturday", "this Saturday", "this weekend", etc., calculate the actual date(s) based on today's date
 - Always return dates in ISO 8601 format (YYYY-MM-DD)
-- For "this weekend" or "next weekend", you may need to extract both Saturday and Sunday dates`,
+- For "this weekend" or "next weekend", you may need to extract both Saturday and Sunday dates
+- Set hasDate=true if ANY date is mentioned (even relative like "next Saturday")
+- Set hasTime=true only if a specific time is mentioned (like "2 PM" or "14:00")`,
           parameters: {
             type: 'object',
             properties: {
@@ -254,6 +304,42 @@ DATE CALCULATION:
       },
     ];
 
+    const adjustExtractedDateTime = (data: any) => {
+      if (!data) {
+        return data;
+      }
+
+      try {
+        if (data.date) {
+          const dateObj = new Date(data.date + 'T00:00:00');
+          dateObj.setDate(dateObj.getDate() + 1);
+          data.date = dateObj.toISOString().split('T')[0];
+        }
+
+        if (data.datetime) {
+          const datetimeObj = new Date(data.datetime);
+          datetimeObj.setDate(datetimeObj.getDate() + 1);
+          data.datetime = datetimeObj.toISOString();
+        }
+
+        if (data.weekendStartDate) {
+          const saturday = new Date(data.weekendStartDate + 'T00:00:00');
+          saturday.setDate(saturday.getDate() + 1);
+          data.weekendStartDate = saturday.toISOString().split('T')[0];
+        }
+
+        if (data.weekendEndDate) {
+          const sunday = new Date(data.weekendEndDate + 'T00:00:00');
+          sunday.setDate(sunday.getDate() + 1);
+          data.weekendEndDate = sunday.toISOString().split('T')[0];
+        }
+      } catch (error) {
+        console.error('Error adjusting extracted date/time:', error);
+      }
+
+      return data;
+    };
+
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: formattedMessages,
@@ -268,9 +354,18 @@ DATE CALCULATION:
       throw new Error('No response from OpenAI');
     }
 
+    // Log whether tools were called
+    console.log('Message content:', message.content);
+    console.log('Tool calls:', message.tool_calls ? message.tool_calls.length : 0);
+    if (message.tool_calls) {
+      console.log('Tool call details:', message.tool_calls.map(tc => ({ name: tc.function.name, args: tc.function.arguments })));
+    }
+
     // Check if tools were called
-    let extractedDateTime = null;
-    let proposals = null;
+    let extractedDateTime: any = null;
+    let timeProposals: any[] = [];
+    let venueProposals: any[] = [];
+    let preferences: any = {};
     
     if (message.tool_calls && message.tool_calls.length > 0) {
       // Extract date/time
@@ -278,53 +373,60 @@ DATE CALCULATION:
       if (dateTimeToolCall) {
         try {
           console.log('toolCall.function.arguments', dateTimeToolCall.function.arguments);
-          extractedDateTime = JSON.parse(dateTimeToolCall.function.arguments);
+          extractedDateTime = adjustExtractedDateTime(JSON.parse(dateTimeToolCall.function.arguments));
           console.log('extractedDateTime', extractedDateTime);
-          
-          // Hardcode: Add 1 day to the extracted date
-          if (extractedDateTime && extractedDateTime.date) {
-            const dateObj = new Date(extractedDateTime.date + 'T00:00:00');
-            dateObj.setDate(dateObj.getDate() + 1); // Add 1 day
-            extractedDateTime.date = dateObj.toISOString().split('T')[0];
-            
-            // Update datetime if it exists
-            if (extractedDateTime.datetime) {
-              const datetimeObj = new Date(extractedDateTime.datetime);
-              datetimeObj.setDate(datetimeObj.getDate() + 1);
-              extractedDateTime.datetime = datetimeObj.toISOString();
-            }
-            
-            // Update weekend dates if they exist
-            if (extractedDateTime.weekendStartDate) {
-              const saturday = new Date(extractedDateTime.weekendStartDate + 'T00:00:00');
-              saturday.setDate(saturday.getDate() + 1);
-              extractedDateTime.weekendStartDate = saturday.toISOString().split('T')[0];
-            }
-            if (extractedDateTime.weekendEndDate) {
-              const sunday = new Date(extractedDateTime.weekendEndDate + 'T00:00:00');
-              sunday.setDate(sunday.getDate() + 1);
-              extractedDateTime.weekendEndDate = sunday.toISOString().split('T')[0];
-            }
-          }
         } catch (e) {
           console.error('Error parsing date/time tool arguments:', e);
         }
       }
       
-      // Extract proposals
-      const proposalsToolCall = message.tool_calls.find(tc => tc.function.name === 'extract_proposals');
-      if (proposalsToolCall) {
+      // Extract time proposals
+      const timeProposalsToolCall = message.tool_calls.find(tc => tc.function.name === 'extract_time_proposals');
+      if (timeProposalsToolCall) {
         try {
-          proposals = JSON.parse(proposalsToolCall.function.arguments);
-          console.log('proposals', proposals);
+          const timeData = JSON.parse(timeProposalsToolCall.function.arguments);
+          timeProposals = timeData.timeProposals || [];
         } catch (e) {
-          console.error('Error parsing proposals tool arguments:', e);
+          console.error('Error parsing time proposals tool arguments:', e);
+        }
+      }
+      
+      // Extract venue proposals
+      const venueProposalsToolCall = message.tool_calls.find(tc => tc.function.name === 'extract_venue_proposals');
+      if (venueProposalsToolCall) {
+        try {
+          const venueData = JSON.parse(venueProposalsToolCall.function.arguments);
+          venueProposals = venueData.venueProposals || [];
+        } catch (e) {
+          console.error('Error parsing venue proposals tool arguments:', e);
+        }
+      }
+      
+      // Extract preferences
+      const preferencesToolCall = message.tool_calls.find(tc => tc.function.name === 'extract_preferences');
+      if (preferencesToolCall) {
+        try {
+          preferences = JSON.parse(preferencesToolCall.function.arguments);
+        } catch (e) {
+          console.error('Error parsing preferences tool arguments:', e);
         }
       }
     }
+    
+    // Combine into proposals object for frontend compatibility
+    let proposals = {
+      timeProposals: timeProposals,
+      venueProposals: venueProposals,
+      preferences: preferences,
+      hasTimeProposals: timeProposals.length > 0,
+      hasVenueProposals: venueProposals.length > 0,
+      hasPreferences: Object.keys(preferences).some(key => preferences[key] !== null && preferences[key] !== undefined && preferences[key] !== ''),
+    };
 
     // Get the text response
     let responseText = message.content;
+    
+    // We'll force extraction for each tool after ensuring we have a response
     
     // If tool was called but no content, add tool responses and get text response
     if (!responseText && message.tool_calls && message.tool_calls.length > 0) {
@@ -342,10 +444,22 @@ DATE CALCULATION:
             content: JSON.stringify(extractedDateTime || {}),
             tool_call_id: tc.id,
           });
-        } else if (tc.function.name === 'extract_proposals') {
+        } else if (tc.function.name === 'extract_time_proposals') {
           toolResponses.push({
             role: 'tool' as const,
-            content: JSON.stringify(proposals || {}),
+            content: JSON.stringify({ timeProposals: timeProposals }),
+            tool_call_id: tc.id,
+          });
+        } else if (tc.function.name === 'extract_venue_proposals') {
+          toolResponses.push({
+            role: 'tool' as const,
+            content: JSON.stringify({ venueProposals: venueProposals }),
+            tool_call_id: tc.id,
+          });
+        } else if (tc.function.name === 'extract_preferences') {
+          toolResponses.push({
+            role: 'tool' as const,
+            content: JSON.stringify(preferences || {}),
             tool_call_id: tc.id,
           });
         }
@@ -369,6 +483,95 @@ DATE CALCULATION:
     if (!responseText) {
       throw new Error('No response from OpenAI');
     }
+
+    const conversationWithResponse = [
+      ...formattedMessages,
+      {
+        role: 'assistant' as const,
+        content: responseText,
+      },
+    ];
+
+    const forceToolExtraction = async (toolName: string, userInstruction: string) => {
+      try {
+        const extractionMessages = [
+          ...conversationWithResponse,
+          {
+            role: 'user' as const,
+            content: userInstruction,
+          },
+        ];
+
+        const extractionCompletion = await openai.chat.completions.create({
+          model: 'gpt-4o-mini',
+          messages: extractionMessages,
+          tools: tools,
+          tool_choice: { type: 'function', function: { name: toolName } },
+          temperature: 0,
+          max_tokens: 500,
+        });
+
+        const extractionMessage = extractionCompletion.choices[0]?.message;
+        if (extractionMessage?.tool_calls && extractionMessage.tool_calls.length > 0) {
+          const toolCall = extractionMessage.tool_calls.find(tc => tc.function.name === toolName);
+          if (toolCall) {
+            return JSON.parse(toolCall.function.arguments);
+          }
+        }
+      } catch (error) {
+        console.error(`Error forcing ${toolName}:`, error);
+      }
+      return null;
+    };
+
+    const forcedDateTime = await forceToolExtraction(
+      'extract_date_time',
+      'Call extract_date_time to convert any relative dates/times mentioned in the conversation (e.g., "next Saturday", "11:00 AM") into ISO 8601 date/time fields. If no date/time was mentioned, return { "hasDate": false, "hasTime": false }.'
+    );
+    if (forcedDateTime) {
+      extractedDateTime = adjustExtractedDateTime(forcedDateTime);
+    }
+
+    const forcedTimeProposals = await forceToolExtraction(
+      'extract_time_proposals',
+      'Call extract_time_proposals to list EVERY time slot you proposed in your assistant response. Convert each start/end time to 24-hour HH:MM format (e.g., "11:00 AM" -> "11:00", "2:00 PM" -> "14:00"). Include the duration text you mentioned. If you did not suggest time slots, return { "timeProposals": [] }.'
+    );
+    if (forcedTimeProposals) {
+      timeProposals = forcedTimeProposals.timeProposals || [];
+    }
+
+    const forcedVenueProposals = await forceToolExtraction(
+      'extract_venue_proposals',
+      'Call extract_venue_proposals to return EVERY venue you mentioned in your assistant response. For each venue, populate name, address, phone, website, rating, and features exactly as stated. If you did not mention venues, return { "venueProposals": [] }.'
+    );
+    if (forcedVenueProposals) {
+      venueProposals = forcedVenueProposals.venueProposals || [];
+    }
+
+    const forcedPreferences = await forceToolExtraction(
+      'extract_preferences',
+      'Call extract_preferences to capture any preferences mentioned anywhere in the conversation (user messages + your response). At minimum, extract ageGroup from phrases like "5 year old niece". Populate partyTheme, budget, numberOfGuests, specialRequirements, and other if mentioned, otherwise set them to null.'
+    );
+    if (forcedPreferences) {
+      preferences = forcedPreferences;
+    }
+
+    proposals = {
+      timeProposals,
+      venueProposals,
+      preferences,
+      hasTimeProposals: timeProposals.length > 0,
+      hasVenueProposals: venueProposals.length > 0,
+      hasPreferences: Object.keys(preferences).some(key => preferences[key] !== null && preferences[key] !== undefined && preferences[key] !== ''),
+    };
+
+    console.log('Final extraction summary:', {
+      hasDate: extractedDateTime?.hasDate,
+      hasTime: extractedDateTime?.hasTime,
+      timeProposalCount: timeProposals.length,
+      venueProposalCount: venueProposals.length,
+      preferences,
+    });
 
     return NextResponse.json({ 
       message: responseText,
