@@ -104,13 +104,20 @@ export async function POST(request: NextRequest) {
       accessToken,
       refreshToken,
       async (events) => {
-        console.log(`[Monitor] 🎯 CALLBACK TRIGGERED with ${events.length} events`);
-        events.forEach(event => {
-          console.log(`[Monitor] Event: "${event.title}" - ${event.date.toISOString()}`);
+        console.log('\n' + '='.repeat(80));
+        console.log(`[Monitor] 🎯 NEW EVENTS DETECTED! Found ${events.length} event(s)`);
+        console.log('='.repeat(80));
+        events.forEach((event, index) => {
+          console.log(`\n[Monitor] Event ${index + 1}:`);
+          console.log(`  📅 Title: "${event.title}"`);
+          console.log(`  🕐 Date: ${event.date.toISOString()}`);
+          console.log(`  📍 Location: ${event.location || '(No location)'}`);
+          console.log(`  🆔 ID: ${event.id}`);
         });
+        console.log('\n' + '='.repeat(80) + '\n');
         // In production, you'd trigger event analysis here
       },
-      60000 // Check every minute for testing
+      5 * 60 * 1000 // 5 minutes - safe from rate limits (Google: 100 req/100 sec per user)
     );
 
     await watcher.start();
@@ -121,7 +128,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       message: 'Monitoring started',
-      pollInterval: '60 seconds',
+      pollInterval: '5 minutes',
       userId: userKey,
     });
   } catch (error) {

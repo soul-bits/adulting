@@ -1,9 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // Enable experimental features if needed
+  // Enable instrumentation for startup initialization
   experimental: {
-    // Add any experimental features here
+    instrumentationHook: true,
   },
   // Configure image domains if using external images
   images: {

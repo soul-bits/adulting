@@ -8,20 +8,27 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getCalendarClient, fetchCalendarEvents } from '@/lib/integrations/google-calendar';
+import { env } from '@/lib/config/env';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
-    const accessToken = searchParams.get('accessToken');
-    const refreshToken = searchParams.get('refreshToken') || undefined;
+    let accessToken = searchParams.get('accessToken');
+    let refreshToken = searchParams.get('refreshToken') || undefined;
+
+    // If no token provided, try to use environment variables
+    if (!accessToken) {
+      accessToken = env.googleCalendar.accessToken || undefined;
+      refreshToken = env.googleCalendar.refreshToken || undefined;
+    }
 
     if (!accessToken) {
       return NextResponse.json(
         { 
           error: 'Access token is required',
-          message: 'Add ?accessToken=YOUR_TOKEN to the URL',
+          message: 'Either provide ?accessToken=YOUR_TOKEN in the URL, or set GOOGLE_ACCESS_TOKEN in .env.local',
           example: '/api/calendar/check?accessToken=YOUR_TOKEN'
         },
         { status: 401 }

@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
       try {
         console.log('[OAuth Callback] Creating watch subscription automatically...');
         const { getCalendarClient, createWatchSubscription } = await import('@/lib/integrations/google-calendar');
-        const calendarClient = getCalendarClient(tokens.access_token!, tokens.refresh_token);
+        const calendarClient = getCalendarClient(tokens.access_token!, tokens.refresh_token || undefined);
         watchSubscription = await createWatchSubscription(calendarClient, webhookUrl);
         console.log('[OAuth Callback] ✅ Watch subscription created!');
       } catch (error) {
@@ -59,15 +59,37 @@ export async function GET(request: NextRequest) {
       console.log('[OAuth Callback] Set WEBHOOK_URL in .env.local to enable webhooks');
     }
 
+    // Try to automatically start monitoring if tokens are available
+    let monitoringStarted = false;
+    try {
+      const { initializeCalendarMonitoring } = await import('@/lib/calendar/monitor-init');
+      // Temporarily set tokens for initialization
+      if (tokens.access_token) {
+        process.env.GOOGLE_ACCESS_TOKEN = tokens.access_token;
+      }
+      if (tokens.refresh_token) {
+        process.env.GOOGLE_REFRESH_TOKEN = tokens.refresh_token;
+      }
+      monitoringStarted = await initializeCalendarMonitoring();
+    } catch (error) {
+      console.error('[OAuth Callback] Failed to start monitoring:', error);
+    }
+
     // In a real app, you'd store these tokens securely (database, session, etc.)
     // For testing, we'll return them (in production, redirect to a page that stores them)
     return NextResponse.json({
       success: true,
-      message: 'Authentication successful! Save these tokens securely.',
+      message: 'Authentication successful! Save these tokens to .env.local to enable automatic monitoring.',
       tokens: {
         access_token: tokens.access_token,
         refresh_token: tokens.refresh_token,
         expiry_date: tokens.expiry_date,
+      },
+      monitoring: {
+        started: monitoringStarted,
+        note: monitoringStarted 
+          ? 'Monitoring started automatically! It will continue until server restart.'
+          : 'Add tokens to .env.local and restart server for persistent monitoring.',
       },
       watchSubscription: watchSubscription ? {
         channelId: watchSubscription.channelId,
@@ -75,9 +97,12 @@ export async function GET(request: NextRequest) {
         expiration: watchSubscription.expiration,
       } : null,
       nextSteps: [
-        'Use the access_token to fetch events: /api/calendar/events?accessToken=YOUR_TOKEN',
-        'Create watch subscription: POST /api/calendar/watch',
-        'Webhook will receive notifications at: /api/calendar/webhook',
+        '1. Add these tokens to your .env.local file:',
+        '   GOOGLE_ACCESS_TOKEN=' + tokens.access_token,
+        tokens.refresh_token ? '   GOOGLE_REFRESH_TOKEN=' + tokens.refresh_token : '   (Refresh token not provided)',
+        '2. Restart your server: npm run dev',
+        '3. Monitoring will start automatically on server startup',
+        '4. Check status at: /api/calendar/status',
       ],
     });
   } catch (error) {
