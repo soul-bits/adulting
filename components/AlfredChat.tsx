@@ -138,12 +138,14 @@ export function AlfredChat({ onClose }: AlfredChatProps) {
       }
 
       const data = await response.json();
+      console.log('data', data);
       const alfredMessage: Message = {
         id: (Date.now() + 1).toString(),
         sender: 'alfred',
         text: data.message,
         timestamp: new Date()
       };
+      
       setMessages(prev => [...prev, alfredMessage]);
       
       // Update extracted date/time if found
@@ -173,7 +175,7 @@ export function AlfredChat({ onClose }: AlfredChatProps) {
   };
 
   const quickPrompts = [
-    "Plan my niece's birthday party",
+    "Plan my 5 year old niece's birthday party next Saturday",
     "Book a restaurant for anniversary",
     "Help me prepare for team meeting",
     "Find a gift for my partner"
