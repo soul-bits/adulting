@@ -40,7 +40,9 @@ export function AlfredChat({ onClose }: AlfredChatProps) {
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [extractedDateTime, setExtractedDateTime] = useState<ExtractedDateTime | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const recognitionRef = useRef<any>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -49,6 +51,58 @@ export function AlfredChat({ onClose }: AlfredChatProps) {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Initialize speech recognition
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        recognitionRef.current = new SpeechRecognition();
+        recognitionRef.current.continuous = false;
+        recognitionRef.current.interimResults = false;
+        recognitionRef.current.lang = 'en-US';
+
+        recognitionRef.current.onresult = (event: any) => {
+          const transcript = event.results[0][0].transcript;
+          setInputValue(prev => prev + (prev ? ' ' : '') + transcript);
+          setIsRecording(false);
+        };
+
+        recognitionRef.current.onerror = (event: any) => {
+          console.error('Speech recognition error:', event.error);
+          setIsRecording(false);
+          if (event.error === 'not-allowed') {
+            alert('Microphone access denied. Please enable microphone permissions in your browser settings.');
+          }
+        };
+
+        recognitionRef.current.onend = () => {
+          setIsRecording(false);
+        };
+      }
+    }
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+    };
+  }, []);
+
+  const handleVoiceInput = () => {
+    if (!recognitionRef.current) {
+      alert('Speech recognition is not supported in your browser. Please use Chrome, Edge, or Safari.');
+      return;
+    }
+
+    if (isRecording) {
+      recognitionRef.current.stop();
+      setIsRecording(false);
+    } else {
+      recognitionRef.current.start();
+      setIsRecording(true);
+    }
+  };
 
   const handleSend = async () => {
     if (!inputValue.trim()) return;
@@ -261,10 +315,11 @@ export function AlfredChat({ onClose }: AlfredChatProps) {
             <Button
               variant="outline"
               size="icon"
-              className="flex-shrink-0"
-              title="Voice input"
+              className={`flex-shrink-0 ${isRecording ? 'bg-red-100 border-red-300 animate-pulse' : ''}`}
+              title={isRecording ? 'Stop recording' : 'Start voice input'}
+              onClick={handleVoiceInput}
             >
-              <Mic className="h-4 w-4" />
+              <Mic className={`h-4 w-4 ${isRecording ? 'text-red-600' : ''}`} />
             </Button>
             <input
               type="text"
