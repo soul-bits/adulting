@@ -11,10 +11,13 @@ import { NotificationCard } from './NotificationCard';
 type DashboardProps = {
   events: EventType[];
   notifications: Notification[];
+  loading?: boolean;
+  error?: string | null;
   onEventSelect: (event: EventType) => void;
   onViewChange: (view: ViewType) => void;
   onChatOpen: () => void;
   onDismissNotification: (id: string) => void;
+  onRetry?: () => void;
 };
 
 /**
@@ -23,10 +26,13 @@ type DashboardProps = {
 export function Dashboard({
   events,
   notifications,
+  loading = false,
+  error = null,
   onEventSelect,
   onViewChange,
   onChatOpen,
-  onDismissNotification
+  onDismissNotification,
+  onRetry
 }: DashboardProps) {
   const upcomingEvents = events
     .filter(e => e.date >= new Date())
@@ -146,8 +152,40 @@ export function Dashboard({
               <h2 className="text-xl">Upcoming Events</h2>
               <Button variant="ghost" size="sm">View All</Button>
             </div>
-            <div className="space-y-3">
-              {upcomingEvents.map(event => (
+            
+            {loading && (
+              <div className="flex flex-col items-center justify-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mb-3"></div>
+                <p className="text-sm text-gray-600">Loading calendar events...</p>
+              </div>
+            )}
+            
+            {error && !loading && (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <div className="text-red-500 text-3xl mb-2">⚠️</div>
+                <p className="text-sm text-gray-600 mb-3">{error}</p>
+                {onRetry && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={onRetry}
+                    className="mt-2"
+                  >
+                    Retry
+                  </Button>
+                )}
+              </div>
+            )}
+            
+            {!loading && !error && (
+              <div className="space-y-3">
+                {upcomingEvents.length === 0 ? (
+                  <div className="text-center py-12 text-gray-500">
+                    <CalendarIcon className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                    <p className="text-sm">No upcoming events</p>
+                  </div>
+                ) : (
+                  upcomingEvents.map(event => (
                 <div
                   key={event.id}
                   onClick={() => onEventSelect(event)}
@@ -224,8 +262,10 @@ export function Dashboard({
                     )}
                   </div>
                 </div>
-              ))}
-            </div>
+                  ))
+                )}
+              </div>
+            )}
           </Card>
         </div>
 
@@ -238,53 +278,37 @@ export function Dashboard({
           </Card>
 
           {/* Alfred Suggestions */}
-          <Card className="p-6 bg-gradient-to-br from-indigo-50 to-purple-50 border-indigo-200">
-            <div className="flex items-center gap-2 mb-4">
-              <Sparkles className="h-5 w-5 text-indigo-600" />
-              <h2 className="text-xl">Alfred's Suggestions</h2>
-            </div>
-            <div className="space-y-3">
-              <div className="p-3 bg-white rounded-lg border border-indigo-200">
-                <p className="text-sm mb-2">
-                  🎂 Your niece's birthday is coming up! I've prepared gift options and venue suggestions.
-                </p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => events[0] && onEventSelect(events[0])}
-                  className="w-full"
-                >
-                  View Details
-                </Button>
+          {upcomingEvents.length > 0 && (
+            <Card className="p-6 bg-gradient-to-br from-indigo-50 to-purple-50 border-indigo-200">
+              <div className="flex items-center gap-2 mb-4">
+                <Sparkles className="h-5 w-5 text-indigo-600" />
+                <h2 className="text-xl">Upcoming Events</h2>
               </div>
-              <div className="p-3 bg-white rounded-lg border border-indigo-200">
-                <p className="text-sm mb-2">
-                  💼 Team meeting next week - I can prep your presentation and book the venue.
-                </p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => events[1] && onEventSelect(events[1])}
-                  className="w-full"
-                >
-                  Review Tasks
-                </Button>
+              <div className="space-y-3">
+                {upcomingEvents.slice(0, 3).map((event, index) => (
+                  <div key={event.id} className="p-3 bg-white rounded-lg border border-indigo-200">
+                    <p className="text-sm mb-2">
+                      📅 <strong>{event.title}</strong> - {event.date.toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: 'numeric',
+                        minute: '2-digit'
+                      })}
+                      {event.location && ` at ${event.location}`}
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onEventSelect(event)}
+                      className="w-full"
+                    >
+                      View Details
+                    </Button>
+                  </div>
+                ))}
               </div>
-              <div className="p-3 bg-white rounded-lg border border-indigo-200">
-                <p className="text-sm mb-2">
-                  💍 Anniversary dinner is approaching - ready to book a romantic restaurant?
-                </p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => events[2] && onEventSelect(events[2])}
-                  className="w-full"
-                >
-                  See Options
-                </Button>
-              </div>
-            </div>
-          </Card>
+            </Card>
+          )}
 
           {/* Notifications */}
           {notifications.length > 0 && (

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dashboard } from '@/components/Dashboard';
 import { EventWorkflow } from '@/components/EventWorkflow';
 import { TaskTracking } from '@/components/TaskTracking';
@@ -12,172 +12,54 @@ import { EventType, Notification, ViewType, Task } from '@/lib/types';
  * Home page - displays the main dashboard and handles navigation
  * 
  * This page manages the main application state and routes between different views.
- * For now, it uses mock data. Later, this will fetch from APIs.
+ * Fetches calendar events from the API on mount.
  */
 export default function Home() {
   const [currentView, setCurrentView] = useState<ViewType>('dashboard');
   const [selectedEvent, setSelectedEvent] = useState<EventType | null>(null);
   const [showChat, setShowChat] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
-  // Mock data - will be replaced with API calls later
-  const [events, setEvents] = useState<EventType[]>([
-    {
-      id: '1',
-      title: "Niece's Birthday Party",
-      date: new Date(2025, 10, 22, 14, 0),
-      type: 'birthday',
-      location: "Chuck E. Cheese",
-      participants: ['Sarah', 'Tom', 'Emma', '+ 7 kids'],
-      status: 'in-progress',
-      tasks: [
-        {
-          id: 't1',
-          eventId: '1',
-          category: 'shopping',
-          title: 'Birthday Cake',
-          description: 'Order birthday cake for 10 people',
-          status: 'suggested',
-          needsApproval: true,
-          suggestions: [
-            {
-              id: 's1',
-              title: 'Unicorn Theme Cake',
-              description: 'Chocolate cake with vanilla frosting',
-              price: '$45',
-              image: 'https://images.unsplash.com/photo-1558636508-e0db3814bd1d?w=400'
-            },
-            {
-              id: 's2',
-              title: 'Rainbow Layer Cake',
-              description: 'Colorful layers with buttercream',
-              price: '$52',
-              image: 'https://images.unsplash.com/photo-1535141192574-5d4897c12636?w=400'
-            }
-          ]
-        },
-        {
-          id: 't2',
-          eventId: '1',
-          category: 'booking',
-          title: 'Venue Reservation',
-          description: 'Book Chuck E. Cheese for 2 PM',
-          status: 'approved',
-          needsApproval: false
-        },
-        {
-          id: 't3',
-          eventId: '1',
-          category: 'shopping',
-          title: 'Return Gifts',
-          description: 'Small toys and treats for party guests',
-          status: 'suggested',
-          needsApproval: true,
-          suggestions: [
-            {
-              id: 's3',
-              title: 'Party Favor Pack',
-              description: '10-pack of mini toys and stickers',
-              price: '$28',
-              link: 'https://amazon.com'
-            }
-          ]
-        },
-        {
-          id: 't4',
-          eventId: '1',
-          category: 'communication',
-          title: 'Send Invitations',
-          description: 'Email invites to parents with RSVP form',
-          status: 'suggested',
-          needsApproval: true
-        }
-      ]
-    },
-    {
-      id: '2',
-      title: 'Team Offsite Meeting',
-      date: new Date(2025, 10, 25, 10, 0),
-      type: 'meeting',
-      location: 'The Grand Hotel',
-      participants: ['Team of 12'],
-      status: 'pending',
-      tasks: [
-        {
-          id: 't5',
-          eventId: '2',
-          category: 'booking',
-          title: 'Conference Room',
-          description: 'Book conference room with AV equipment',
-          status: 'suggested',
-          needsApproval: true
-        },
-        {
-          id: 't6',
-          eventId: '2',
-          category: 'preparation',
-          title: 'Presentation Materials',
-          description: 'Prepare slides and handouts',
-          status: 'suggested',
-          needsApproval: false
-        }
-      ]
-    },
-    {
-      id: '3',
-      title: 'Anniversary Dinner',
-      date: new Date(2025, 10, 28, 19, 30),
-      type: 'dinner',
-      location: 'La Bella Vista',
-      participants: ['You', 'Partner'],
-      status: 'pending',
-      tasks: [
-        {
-          id: 't7',
-          eventId: '3',
-          category: 'booking',
-          title: 'Restaurant Reservation',
-          description: 'Book table for 2 at 7:30 PM',
-          status: 'suggested',
-          needsApproval: true
-        },
-        {
-          id: 't8',
-          eventId: '3',
-          category: 'shopping',
-          title: 'Gift Selection',
-          description: 'Anniversary gift suggestions',
-          status: 'suggested',
-          needsApproval: true,
-          suggestions: [
-            {
-              id: 's4',
-              title: 'Jewelry Set',
-              description: 'Elegant necklace and earrings',
-              price: '$120',
-              image: 'https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?w=400'
-            }
-          ]
-        }
-      ]
-    }
-  ]);
+  // Fetch calendar events from API
+  const [events, setEvents] = useState<EventType[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
 
-  const [notifications, setNotifications] = useState<Notification[]>([
-    {
-      id: 'n1',
-      type: 'question',
-      message: 'Should I confirm the Chuck E. Cheese reservation for 2 PM on Nov 22?',
-      eventId: '1',
-      taskId: 't2',
-      options: ['Yes, confirm', 'Change time', 'Cancel']
-    },
-    {
-      id: 'n2',
-      type: 'approval',
-      message: '3 tasks are ready for your approval',
-      options: ['Review now', 'Later']
+  // Fetch calendar events on component mount
+  useEffect(() => {
+    async function fetchEvents() {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        const response = await fetch('/api/calendar/events');
+        const data = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(data.message || 'Failed to fetch calendar events');
+        }
+        
+        if (data.success && data.events) {
+          // Convert date strings to Date objects
+          const eventsWithDates = data.events.map((event: any) => ({
+            ...event,
+            date: new Date(event.date),
+          }));
+          setEvents(eventsWithDates);
+        } else {
+          setEvents([]);
+        }
+      } catch (err) {
+        console.error('Error fetching calendar events:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load calendar events');
+        setEvents([]);
+      } finally {
+        setLoading(false);
+      }
     }
-  ]);
+    
+    fetchEvents();
+  }, []);
 
   const handleEventSelect = (event: EventType) => {
     setSelectedEvent(event);
@@ -220,10 +102,13 @@ export default function Home() {
         <Dashboard
           events={events}
           notifications={notifications}
+          loading={loading}
+          error={error}
           onEventSelect={handleEventSelect}
           onViewChange={handleViewChange}
           onChatOpen={() => setShowChat(true)}
           onDismissNotification={handleDismissNotification}
+          onRetry={() => window.location.reload()}
         />
         {showChat && <AlfredChat onClose={() => setShowChat(false)} />}
       </>

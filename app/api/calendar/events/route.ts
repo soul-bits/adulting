@@ -11,18 +11,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCalendarClient, fetchCalendarEvents, createCalendarEvent, convertGoogleEventToEventType } from '@/lib/integrations/google-calendar';
 import { EventType } from '@/lib/types';
+import { env } from '@/lib/config/env';
 
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
-    const accessToken = searchParams.get('accessToken');
-    const refreshToken = searchParams.get('refreshToken') || undefined;
+    let accessToken = searchParams.get('accessToken');
+    let refreshToken = searchParams.get('refreshToken') || undefined;
+
+    // If no token provided, try to use environment variables
+    if (!accessToken) {
+      accessToken = env.googleCalendar.accessToken || undefined;
+      refreshToken = env.googleCalendar.refreshToken || undefined;
+    }
 
     if (!accessToken) {
       return NextResponse.json(
         { 
           error: 'Access token is required',
-          message: 'Please authenticate first by visiting /api/calendar/auth',
+          message: 'Either provide ?accessToken=YOUR_TOKEN in the URL, or set GOOGLE_ACCESS_TOKEN in .env.local',
           authUrl: '/api/calendar/auth'
         },
         { status: 401 }
