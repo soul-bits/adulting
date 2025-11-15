@@ -24,6 +24,8 @@ export function ApprovalPanel({ events, onBack, onTaskUpdate }: ApprovalPanelPro
   const autoFetchInitiatedRef = useRef<Set<string>>(new Set());
   const [selectedEmails, setSelectedEmails] = useState<Record<string, Set<string>>>({});
   const [selectedVenues, setSelectedVenues] = useState<Record<string, string>>({});
+  const [sendingEmails, setSendingEmails] = useState<Record<string, boolean>>({});
+  const [sendingInvitations, setSendingInvitations] = useState<Record<string, boolean>>({});
   
   const pendingApprovals = events.flatMap(event =>
     event.tasks
@@ -36,7 +38,7 @@ export function ApprovalPanel({ events, onBack, onTaskUpdate }: ApprovalPanelPro
         // Use stored suggestions if available, otherwise use task suggestions
         suggestions: taskSuggestions[task.id] || task.suggestions || [],
         // Use stored browser-use URL if available
-        browserUseUrl: taskBrowserUseUrls[task.id] || task.browserUseUrl
+        browserUseUrl: taskBrowserUseUrls[task.id] || (task as any).browserUseUrl
       }))
   );
 
@@ -315,10 +317,73 @@ export function ApprovalPanel({ events, onBack, onTaskUpdate }: ApprovalPanelPro
                     });
                   };
 
-                  const handleSend = () => {
-                    // Mark task as completed when email is sent
-                    onTaskUpdate(task.eventId, task.id, 'completed');
+                  const handleSend = async () => {
+                    if (selectedSet.size === 0) {
+                      return;
+                    }
+
+                    const taskEmailKey = `${task.id}-emails`;
+                    setSendingInvitations(prev => ({ ...prev, [taskEmailKey]: true }));
+
+                    try {
+                      const emailArray = Array.from(selectedSet);
+                      
+                      console.log(`[ApprovalPanel] Sending invitations to ${emailArray.length} recipient(s)...`);
+                      
+                      // Send email via API
+                      const response = await fetch('/api/email/send', {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                          to: emailArray,
+                          type: 'invitation',
+                          eventData: {
+                            title: task.eventTitle,
+                            date: task.eventDate.toISOString(),
+                            location: undefined,
+                            description: `You've been invited to ${task.eventTitle}`,
+                          },
+                        }),
+                      });
+
+                      const data = await response.json();
+
+                      if (!response.ok) {
+                        throw new Error(data.message || 'Failed to send email');
+                      }
+
+                      console.log(`[ApprovalPanel] ✅ Invitations sent successfully to ${emailArray.length} recipient(s)`);
+
+                      // Mark task as completed when email is sent successfully
+                      onTaskUpdate(task.eventId, task.id, 'completed');
+                    } catch (error) {
+                      console.error('[ApprovalPanel] Error sending invitations:', error);
+                      
+                      // Check if it's a permission error
+                      let errorMessage = 'Unknown error';
+                      if (error instanceof Error) {
+                        errorMessage = error.message;
+                        
+                        // Check if we have error data from the API response
+                        if ((error as any).errorData) {
+                          const errorData = (error as any).errorData;
+                          if (errorData.error === 'Insufficient Permission') {
+                            errorMessage = `Gmail permissions not configured. Please visit /api/gmail/auth to authorize Gmail send permissions.`;
+                          }
+                        } else if (errorMessage.includes('Insufficient Permission') || errorMessage.includes('403')) {
+                          errorMessage = `Gmail permissions not configured. Please visit /api/gmail/auth to authorize Gmail send permissions.`;
+                        }
+                      }
+                      
+                      alert(`Failed to send invitations: ${errorMessage}`);
+                    } finally {
+                      setSendingInvitations(prev => ({ ...prev, [taskEmailKey]: false }));
+                    }
                   };
+
+                  const isSending = sendingInvitations[`${task.id}-emails`] || false;
 
                   return (
                     <div className="pt-4 border-t">
@@ -342,11 +407,20 @@ export function ApprovalPanel({ events, onBack, onTaskUpdate }: ApprovalPanelPro
                         </div>
                         <Button
                           onClick={handleSend}
-                          disabled={selectedSet.size === 0}
+                          disabled={selectedSet.size === 0 || isSending}
                           className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          <Send className="mr-2 h-4 w-4" />
-                          Send Invitations {selectedSet.size > 0 && `(${selectedSet.size})`}
+                          {isSending ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Sending Invitations...
+                            </>
+                          ) : (
+                            <>
+                              <Send className="mr-2 h-4 w-4" />
+                              Send Invitations {selectedSet.size > 0 && `(${selectedSet.size})`}
+                            </>
+                          )}
                         </Button>
                       </div>
                     </div>
@@ -390,6 +464,50 @@ export function ApprovalPanel({ events, onBack, onTaskUpdate }: ApprovalPanelPro
 
                   const selectedVenueData = venues.find(v => v.id === selectedVenue);
                   const canCall = selectedVenueData && selectedVenueData.phone;
+                  const canEmail = selectedVenueData && selectedVenueData.email;
+                  const isSendingEmail = sendingEmails[task.id] || false;
+
+                  const handleSendEmail = async () => {
+                    if (!canEmail || !selectedVenueData) {
+                      return;
+                    }
+
+                    setSendingEmails(prev => ({ ...prev, [task.id]: true }));
+                    try {
+                      const response = await fetch('/api/email/send', {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                          to: selectedVenueData.email,
+                          type: 'venue-inquiry',
+                          venueData: {
+                            name: selectedVenueData.name,
+                          },
+                          eventData: {
+                            title: task.eventTitle,
+                            date: task.eventDate.toISOString(),
+                            location: undefined,
+                            description: `Inquiry for ${task.eventTitle}`,
+                          },
+                        }),
+                      });
+
+                      const data = await response.json();
+
+                      if (!response.ok) {
+                        throw new Error(data.message || 'Failed to send email');
+                      }
+
+                      alert(`Email sent successfully to ${selectedVenueData.email}!`);
+                    } catch (error) {
+                      console.error('Error sending email:', error);
+                      alert(`Failed to send email: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                    } finally {
+                      setSendingEmails(prev => ({ ...prev, [task.id]: false }));
+                    }
+                  };
 
                   return (
                     <div className="pt-4 border-t">
@@ -433,20 +551,46 @@ export function ApprovalPanel({ events, onBack, onTaskUpdate }: ApprovalPanelPro
                             </div>
                           ))}
                         </div>
-                        <Button
-                          onClick={() => {
-                            if (canCall && selectedVenueData) {
-                              // Place a call to the selected venue
-                              const phoneNumber = selectedVenueData.phone!.replace(/\D/g, '');
-                              window.location.href = `tel:+1${phoneNumber}`;
-                            }
-                          }}
-                          disabled={!canCall}
-                          className="w-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white disabled:opacity-50 disabled:cursor-not-allowed mb-4"
-                        >
-                          <Phone className="mr-2 h-4 w-4" />
-                          {canCall ? `Place a Call to ${selectedVenueData?.name}` : 'Select a venue with phone number'}
-                        </Button>
+                        <div className="flex gap-2 mb-4">
+                          {canCall && (
+                            <Button
+                              onClick={() => {
+                                if (selectedVenueData) {
+                                  const phoneNumber = selectedVenueData.phone!.replace(/\D/g, '');
+                                  window.location.href = `tel:+1${phoneNumber}`;
+                                }
+                              }}
+                              className="flex-1 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white"
+                            >
+                              <Phone className="mr-2 h-4 w-4" />
+                              Place a Call
+                            </Button>
+                          )}
+                          {canEmail && (
+                            <Button
+                              onClick={handleSendEmail}
+                              disabled={isSendingEmail}
+                              className="flex-1 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {isSendingEmail ? (
+                                <>
+                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                  Sending...
+                                </>
+                              ) : (
+                                <>
+                                  <Mail className="mr-2 h-4 w-4" />
+                                  Send Email
+                                </>
+                              )}
+                            </Button>
+                          )}
+                        </div>
+                        {!canCall && !canEmail && selectedVenue && (
+                          <p className="text-sm text-gray-500 text-center mb-4">
+                            Select a venue to contact
+                          </p>
+                        )}
                         <div className="flex gap-3">
                           <Button
                             variant="outline"

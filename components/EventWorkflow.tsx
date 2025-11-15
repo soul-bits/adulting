@@ -25,6 +25,8 @@ export function EventWorkflow({ event, onBack, onTaskUpdate, onChatOpen }: Event
   const autoFetchInitiatedRef = useRef<Set<string>>(new Set());
   const [selectedEmails, setSelectedEmails] = useState<Record<string, Set<string>>>({});
   const [selectedVenues, setSelectedVenues] = useState<Record<string, string>>({});
+  const [sendingEmails, setSendingEmails] = useState<Record<string, boolean>>({});
+  const [sendingInvitations, setSendingInvitations] = useState<Record<string, boolean>>({});
 
   const handleGetRecommendations = async (task: Task) => {
     // Prevent duplicate calls
@@ -191,19 +193,19 @@ export function EventWorkflow({ event, onBack, onTaskUpdate, onChatOpen }: Event
                 >
                   {event.type}
                 </Badge>
-                {event.planningStatus === 'planning' && (
+                {(event as any).planningStatus === 'planning' && (
                   <Badge className="bg-blue-100 text-blue-700 border-blue-300">
                     <Loader2 className="h-3 w-3 mr-1 animate-spin" />
                     Planning in progress...
                   </Badge>
                 )}
-                {event.planningStatus === 'completed' && event.tasks.length === 0 && (
+                {(event as any).planningStatus === 'completed' && event.tasks.length === 0 && (
                   <Badge className="bg-green-100 text-green-700 border-green-300">
                     <CheckCircle2 className="h-3 w-3 mr-1" />
                     Planning complete
                   </Badge>
                 )}
-                {event.planningStatus === 'error' && (
+                {(event as any).planningStatus === 'error' && (
                   <Badge className="bg-red-100 text-red-700 border-red-300">
                     <AlertCircle className="h-3 w-3 mr-1" />
                     Planning failed
@@ -260,7 +262,7 @@ export function EventWorkflow({ event, onBack, onTaskUpdate, onChatOpen }: Event
         </div>
 
         {/* Planning Status */}
-        {event.planningStatus === 'planning' && (
+        {(event as any).planningStatus === 'planning' && (
           <Card className="p-6 mb-6 border-blue-200 bg-blue-50">
             <div className="flex items-center gap-3">
               <Loader2 className="h-5 w-5 text-blue-600 animate-spin" />
@@ -299,13 +301,13 @@ export function EventWorkflow({ event, onBack, onTaskUpdate, onChatOpen }: Event
         {/* Task Categories */}
         {Object.keys(groupedTasks).length === 0 ? (
           <Card className="p-12 text-center">
-            {event.planningStatus === 'planning' ? (
+            {(event as any).planningStatus === 'planning' ? (
               <div className="flex flex-col items-center gap-3">
                 <Loader2 className="h-12 w-12 text-blue-500 animate-spin" />
                 <h3 className="text-lg font-medium text-gray-900">Planning in Progress</h3>
                 <p className="text-sm text-gray-600">Tasks will appear here once planning is complete.</p>
               </div>
-            ) : event.planningStatus === 'error' ? (
+            ) : (event as any).planningStatus === 'error' ? (
               <div className="flex flex-col items-center gap-3">
                 <AlertCircle className="h-12 w-12 text-red-500" />
                 <h3 className="text-lg font-medium text-gray-900">Planning Failed</h3>
@@ -349,12 +351,12 @@ export function EventWorkflow({ event, onBack, onTaskUpdate, onChatOpen }: Event
                         
                         {/* Browser-Use Link Section */}
                         <div className="mt-3">
-                          {(taskBrowserUseUrls[task.id] || task.browserUseUrl) ? (
+                          {(taskBrowserUseUrls[task.id] || (task as any).browserUseUrl) ? (
                             <div className="flex items-center gap-2">
                               <Button
                                 size="sm"
                                 className="bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white gap-2"
-                                onClick={() => window.open(taskBrowserUseUrls[task.id] || task.browserUseUrl, '_blank', 'noopener,noreferrer')}
+                                onClick={() => window.open(taskBrowserUseUrls[task.id] || (task as any).browserUseUrl, '_blank', 'noopener,noreferrer')}
                               >
                                 <span className="text-lg">🔗</span>
                                 {task.status === 'executing' || loadingRecommendations[task.id] 
@@ -476,10 +478,76 @@ export function EventWorkflow({ event, onBack, onTaskUpdate, onChatOpen }: Event
                         });
                       };
 
-                      const handleSend = () => {
-                        // Mark task as completed when email is sent
-                        onTaskUpdate(event.id, task.id, 'completed');
+                      const handleSend = async () => {
+                        if (selectedSet.size === 0) {
+                          return;
+                        }
+
+                        const taskEmailKey = `${task.id}-emails`;
+                        setSendingInvitations(prev => ({ ...prev, [taskEmailKey]: true }));
+
+                        try {
+                          const emailArray = Array.from(selectedSet);
+                          
+                          console.log(`[EventWorkflow] Sending invitations to ${emailArray.length} recipient(s)...`);
+                          
+                          // Send email via API
+                          const response = await fetch('/api/email/send', {
+                            method: 'POST',
+                            headers: {
+                              'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                              to: emailArray,
+                              type: 'invitation',
+                              eventData: {
+                                title: event.title,
+                                date: event.date.toISOString(),
+                                location: event.location,
+                                description: `You've been invited to ${event.title}`,
+                              },
+                            }),
+                          });
+
+                          const data = await response.json();
+
+                          if (!response.ok) {
+                            // Store error data for better error handling
+                            const error = new Error(data.message || 'Failed to send email') as any;
+                            error.errorData = data;
+                            throw error;
+                          }
+
+                          console.log(`[EventWorkflow] ✅ Invitations sent successfully to ${emailArray.length} recipient(s)`);
+
+                          // Mark task as completed when email is sent successfully
+                          onTaskUpdate(event.id, task.id, 'completed');
+                        } catch (error) {
+                          console.error('[EventWorkflow] Error sending invitations:', error);
+                          
+                          // Check if it's a permission error
+                          let errorMessage = 'Unknown error';
+                          if (error instanceof Error) {
+                            errorMessage = error.message;
+                            
+                            // Check if we have error data from the API response
+                            if ((error as any).errorData) {
+                              const errorData = (error as any).errorData;
+                              if (errorData.error === 'Insufficient Permission') {
+                                errorMessage = `Gmail permissions not configured. Please visit /api/gmail/auth to authorize Gmail send permissions.`;
+                              }
+                            } else if (errorMessage.includes('Insufficient Permission') || errorMessage.includes('403')) {
+                              errorMessage = `Gmail permissions not configured. Please visit /api/gmail/auth to authorize Gmail send permissions.`;
+                            }
+                          }
+                          
+                          alert(`Failed to send invitations: ${errorMessage}`);
+                        } finally {
+                          setSendingInvitations(prev => ({ ...prev, [taskEmailKey]: false }));
+                        }
                       };
+
+                      const isSending = sendingInvitations[`${task.id}-emails`] || false;
 
                       return (
                         <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
@@ -502,11 +570,20 @@ export function EventWorkflow({ event, onBack, onTaskUpdate, onChatOpen }: Event
                           </div>
                           <Button
                             onClick={handleSend}
-                            disabled={selectedSet.size === 0}
+                            disabled={selectedSet.size === 0 || isSending}
                             className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                            <Send className="mr-2 h-4 w-4" />
-                            Send Invitations {selectedSet.size > 0 && `(${selectedSet.size})`}
+                            {isSending ? (
+                              <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Sending Invitations...
+                              </>
+                            ) : (
+                              <>
+                                <Send className="mr-2 h-4 w-4" />
+                                Send Invitations {selectedSet.size > 0 && `(${selectedSet.size})`}
+                              </>
+                            )}
                           </Button>
                         </div>
                       );
@@ -553,6 +630,50 @@ export function EventWorkflow({ event, onBack, onTaskUpdate, onChatOpen }: Event
 
                       const selectedVenueData = venues.find(v => v.id === selectedVenue);
                       const canCall = selectedVenueData && selectedVenueData.phone;
+                      const canEmail = selectedVenueData && selectedVenueData.email;
+                      const isSendingEmail = sendingEmails[task.id] || false;
+
+                      const handleSendEmail = async () => {
+                        if (!canEmail || !selectedVenueData) {
+                          return;
+                        }
+
+                        setSendingEmails(prev => ({ ...prev, [task.id]: true }));
+                        try {
+                          const response = await fetch('/api/email/send', {
+                            method: 'POST',
+                            headers: {
+                              'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                              to: selectedVenueData.email,
+                              type: 'venue-inquiry',
+                              venueData: {
+                                name: selectedVenueData.name,
+                              },
+                              eventData: {
+                                title: event.title,
+                                date: event.date.toISOString(),
+                                location: event.location,
+                                description: `Inquiry for ${event.title}`,
+                              },
+                            }),
+                          });
+
+                          const data = await response.json();
+
+                          if (!response.ok) {
+                            throw new Error(data.message || 'Failed to send email');
+                          }
+
+                          alert(`Email sent successfully to ${selectedVenueData.email}!`);
+                        } catch (error) {
+                          console.error('Error sending email:', error);
+                          alert(`Failed to send email: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                        } finally {
+                          setSendingEmails(prev => ({ ...prev, [task.id]: false }));
+                        }
+                      };
 
                       return (
                         <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
@@ -595,20 +716,46 @@ export function EventWorkflow({ event, onBack, onTaskUpdate, onChatOpen }: Event
                               </div>
                             ))}
                           </div>
-                          <Button
-                            onClick={() => {
-                              if (canCall && selectedVenueData) {
-                                // Place a call to the selected venue
-                                const phoneNumber = selectedVenueData.phone!.replace(/\D/g, '');
-                                window.location.href = `tel:+1${phoneNumber}`;
-                              }
-                            }}
-                            disabled={!canCall}
-                            className="w-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            <Phone className="mr-2 h-4 w-4" />
-                            {canCall ? `Place a Call to ${selectedVenueData?.name}` : 'Select a venue with phone number'}
-                          </Button>
+                          <div className="flex gap-2">
+                            {canCall && (
+                              <Button
+                                onClick={() => {
+                                  if (selectedVenueData) {
+                                    const phoneNumber = selectedVenueData.phone!.replace(/\D/g, '');
+                                    window.location.href = `tel:+1${phoneNumber}`;
+                                  }
+                                }}
+                                className="flex-1 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white"
+                              >
+                                <Phone className="mr-2 h-4 w-4" />
+                                Place a Call
+                              </Button>
+                            )}
+                            {canEmail && (
+                              <Button
+                                onClick={handleSendEmail}
+                                disabled={isSendingEmail}
+                                className="flex-1 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {isSendingEmail ? (
+                                  <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Sending...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Mail className="mr-2 h-4 w-4" />
+                                    Send Email
+                                  </>
+                                )}
+                              </Button>
+                            )}
+                          </div>
+                          {!canCall && !canEmail && selectedVenue && (
+                            <p className="text-sm text-gray-500 text-center mt-2">
+                              Select a venue to contact
+                            </p>
+                          )}
                         </div>
                       );
                     })()}
@@ -665,11 +812,11 @@ export function EventWorkflow({ event, onBack, onTaskUpdate, onChatOpen }: Event
                             <Clock className="mr-2 h-4 w-4 animate-spin" />
                             In Progress...
                           </Button>
-                          {task.browserUseUrl || taskBrowserUseUrls[task.id] ? (
+                          {(task as any).browserUseUrl || taskBrowserUseUrls[task.id] ? (
                             <Button
                               size="sm"
                               className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white"
-                              onClick={() => window.open(task.browserUseUrl || taskBrowserUseUrls[task.id], '_blank', 'noopener,noreferrer')}
+                              onClick={() => window.open((task as any).browserUseUrl || taskBrowserUseUrls[task.id], '_blank', 'noopener,noreferrer')}
                             >
                               <span className="text-lg mr-1">🔗</span>
                               Watch Live Automation
@@ -688,12 +835,12 @@ export function EventWorkflow({ event, onBack, onTaskUpdate, onChatOpen }: Event
                             <CheckCircle2 className="mr-2 h-4 w-4" />
                             Completed
                           </Button>
-                          {(task.browserUseUrl || taskBrowserUseUrls[task.id]) && (
+                          {((task as any).browserUseUrl || taskBrowserUseUrls[task.id]) && (
                             <Button
                               size="sm"
                               variant="outline"
                               className="w-full border-blue-300 text-blue-600 hover:bg-blue-50"
-                              onClick={() => window.open(task.browserUseUrl || taskBrowserUseUrls[task.id], '_blank', 'noopener,noreferrer')}
+                              onClick={() => window.open((task as any).browserUseUrl || taskBrowserUseUrls[task.id], '_blank', 'noopener,noreferrer')}
                             >
                               <span className="mr-1">🔗</span>
                               View Automation Session

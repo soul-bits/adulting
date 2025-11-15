@@ -258,9 +258,17 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('[Recommendations API] ❌ Error getting recommendations:', error);
-    // Clean up on error
-    activeTaskPromises.delete(task.id);
-    taskBrowserUseUrls.delete(task.id);
+    // Clean up on error (task might not be defined if error occurred early)
+    try {
+      const body = await request.json();
+      const task = body.task;
+      if (task?.id) {
+        activeTaskPromises.delete(task.id);
+        taskBrowserUseUrls.delete(task.id);
+      }
+    } catch (e) {
+      // Ignore cleanup errors
+    }
     return NextResponse.json(
       {
         success: false,

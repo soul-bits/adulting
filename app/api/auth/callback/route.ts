@@ -32,31 +32,45 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Exchange code for tokens
-    const tokens = await getTokensFromCode(code);
+    // Check if this is a Gmail authorization by checking the state parameter
+    const state = searchParams.get('state');
+    const isGmailAuth = state === 'gmail_auth';
 
-    console.log('[OAuth Callback] ✅ Authentication successful!');
+    // Exchange code for tokens (use appropriate handler based on auth type)
+    let tokens;
+    if (isGmailAuth) {
+      const { getTokensFromCode: getGmailTokensFromCode } = await import('@/lib/integrations/gmail');
+      tokens = await getGmailTokensFromCode(code);
+      console.log('[OAuth Callback] ✅ Gmail authentication successful!');
+    } else {
+      tokens = await getTokensFromCode(code);
+      console.log('[OAuth Callback] ✅ Calendar authentication successful!');
+    }
+
     console.log('[OAuth Callback] Access token received');
     console.log('[OAuth Callback] Refresh token:', tokens.refresh_token ? 'Yes' : 'No');
 
-    // Automatically create watch subscription if webhook URL is configured
+    // Skip watch subscription for Gmail auth
     let watchSubscription = null;
-    const webhookUrl = process.env.WEBHOOK_URL || `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/calendar/webhook`;
-    
-    if (webhookUrl && webhookUrl !== 'http://localhost:3000/api/calendar/webhook') {
-      try {
-        console.log('[OAuth Callback] Creating watch subscription automatically...');
-        const { getCalendarClient, createWatchSubscription } = await import('@/lib/integrations/google-calendar');
-        const calendarClient = getCalendarClient(tokens.access_token!, tokens.refresh_token || undefined);
-        watchSubscription = await createWatchSubscription(calendarClient, webhookUrl);
-        console.log('[OAuth Callback] ✅ Watch subscription created!');
-      } catch (error) {
-        console.error('[OAuth Callback] ⚠️  Watch subscription failed:', error);
-        console.log('[OAuth Callback] You can create it manually later via /api/calendar/watch');
+    if (!isGmailAuth) {
+      // Automatically create watch subscription if webhook URL is configured
+      const webhookUrl = process.env.WEBHOOK_URL || `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/calendar/webhook`;
+      
+      if (webhookUrl && webhookUrl !== 'http://localhost:3000/api/calendar/webhook') {
+        try {
+          console.log('[OAuth Callback] Creating watch subscription automatically...');
+          const { getCalendarClient, createWatchSubscription } = await import('@/lib/integrations/google-calendar');
+          const calendarClient = getCalendarClient(tokens.access_token!, tokens.refresh_token || undefined);
+          watchSubscription = await createWatchSubscription(calendarClient, webhookUrl);
+          console.log('[OAuth Callback] ✅ Watch subscription created!');
+        } catch (error) {
+          console.error('[OAuth Callback] ⚠️  Watch subscription failed:', error);
+          console.log('[OAuth Callback] You can create it manually later via /api/calendar/watch');
+        }
+      } else {
+        console.log('[OAuth Callback] ⚠️  WEBHOOK_URL not set. Skipping watch subscription.');
+        console.log('[OAuth Callback] Set WEBHOOK_URL in .env.local to enable webhooks');
       }
-    } else {
-      console.log('[OAuth Callback] ⚠️  WEBHOOK_URL not set. Skipping watch subscription.');
-      console.log('[OAuth Callback] Set WEBHOOK_URL in .env.local to enable webhooks');
     }
 
     // NOTE: Calendar monitoring is disabled. UI handles all calendar fetching.
@@ -68,24 +82,30 @@ export async function GET(request: NextRequest) {
     // For testing, we'll return them (in production, redirect to a page that stores them)
     return NextResponse.json({
       success: true,
-      message: 'Authentication successful! Save these tokens to .env.local to enable automatic monitoring.',
+      message: isGmailAuth 
+        ? 'Gmail authorization successful! Copy the refresh_token below and add it to your .env.local file as GMAIL_REFRESH_TOKEN.'
+        : 'Authentication successful! Save these tokens to .env.local to enable automatic monitoring.',
       tokens: {
         access_token: tokens.access_token,
         refresh_token: tokens.refresh_token,
         expiry_date: tokens.expiry_date,
       },
       monitoring: {
-        started: monitoringStarted,
-        note: monitoringStarted 
-          ? 'Monitoring started automatically! It will continue until server restart.'
-          : 'Add tokens to .env.local and restart server for persistent monitoring.',
+        started: false,
+        note: 'Add tokens to .env.local and restart server for persistent monitoring.',
       },
       watchSubscription: watchSubscription ? {
         channelId: watchSubscription.channelId,
         resourceId: watchSubscription.resourceId,
         expiration: watchSubscription.expiration,
       } : null,
-      nextSteps: [
+      nextSteps: isGmailAuth ? [
+        '1. Copy the refresh_token from above',
+        '2. Add this line to your .env.local file:',
+        `   GMAIL_REFRESH_TOKEN=${tokens.refresh_token || 'YOUR_REFRESH_TOKEN_HERE'}`,
+        '3. Restart your server: npm run dev',
+        '4. Try sending invitations again!',
+      ] : [
         '1. Add these tokens to your .env.local file:',
         '   GOOGLE_ACCESS_TOKEN=' + tokens.access_token,
         tokens.refresh_token ? '   GOOGLE_REFRESH_TOKEN=' + tokens.refresh_token : '   (Refresh token not provided)',

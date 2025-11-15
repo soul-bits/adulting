@@ -156,14 +156,14 @@ export async function processBirthdayEvent(
     
     // Update task with browser-use URL immediately (while still executing or after completion)
     if (browserUseUrl) {
-      const urlUpdate: Partial<Task> = {
+      const urlUpdate: Partial<Task> & { browserUseUrl?: string } = {
         browserUseUrl: browserUseUrl,
       };
       if (onTaskUpdated) {
-        onTaskUpdated(task.id, urlUpdate);
+        onTaskUpdated!(task.id, urlUpdate as Partial<Task>);
       }
       // Update local task object
-      task.browserUseUrl = browserUseUrl;
+      (task as any).browserUseUrl = browserUseUrl;
     }
     
     // Update task based on result
@@ -178,7 +178,7 @@ export async function processBirthdayEvent(
           description: 'Item has been added to your Amazon cart',
           link: result.cartUrl,
         }] : [],
-        browserUseUrl: browserUseUrl, // Keep browser-use URL even after completion
+        // browserUseUrl is kept via the update above
       };
       
       if (onTaskUpdated) {

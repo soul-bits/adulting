@@ -207,10 +207,10 @@ export function TaskTracking({ events, onBack, onEventSelect }: TaskTrackingProp
                         </Badge>
                       </div>
                       <p className="text-sm text-gray-600 mb-1">{task.description}</p>
-                      {task.browserUseUrl && (
+                      {(task as any).browserUseUrl && (
                         <div className="mb-2">
                           <a
-                            href={task.browserUseUrl}
+                            href={(task as any).browserUseUrl}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-xs text-blue-600 hover:text-blue-800 underline flex items-center gap-1"
