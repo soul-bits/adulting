@@ -29,14 +29,18 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    console.log('[Calendar API] Fetching events with access token...');
     const calendarClient = getCalendarClient(accessToken, refreshToken);
     const googleEvents = await fetchCalendarEvents(calendarClient);
+    
+    console.log(`[Calendar API] Fetched ${googleEvents.length} events from Google Calendar`);
 
     // Convert to our format
     const events: EventType[] = googleEvents
       .map(googleEvent => {
         const partial = convertGoogleEventToEventType(googleEvent);
         if (partial.id && partial.title && partial.date) {
+          console.log(`[Calendar API] Converting event: ${partial.title} (${partial.date.toISOString()})`);
           return {
             ...partial,
             type: 'other' as const,
@@ -48,11 +52,15 @@ export async function GET(request: NextRequest) {
       })
       .filter((e): e is EventType => e !== null);
 
+    console.log(`[Calendar API] Successfully converted ${events.length} events`);
+    console.log(`[Calendar API] Event titles:`, events.map(e => e.title).join(', '));
+
     return NextResponse.json({
       success: true,
       count: events.length,
       events,
       rawGoogleEvents: googleEvents.length, // For debugging
+      fetchedAt: new Date().toISOString(),
     });
   } catch (error) {
     console.error('Error fetching calendar events:', error);
