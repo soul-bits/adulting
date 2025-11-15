@@ -23,6 +23,7 @@ export function ApprovalPanel({ events, onBack, onTaskUpdate }: ApprovalPanelPro
   const [taskBrowserUseUrls, setTaskBrowserUseUrls] = useState<Record<string, string>>({});
   const autoFetchInitiatedRef = useRef<Set<string>>(new Set());
   const [selectedEmails, setSelectedEmails] = useState<Record<string, Set<string>>>({});
+  const [selectedVenues, setSelectedVenues] = useState<Record<string, string>>({});
   
   const pendingApprovals = events.flatMap(event =>
     event.tasks
@@ -361,75 +362,112 @@ export function ApprovalPanel({ events, onBack, onTaskUpdate }: ApprovalPanelPro
                       </div>
                     </div>
                   </div>
-                ) : task.title.toLowerCase().includes('book venue') ? (
-                  <div className="pt-4 border-t">
-                    <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                      <p className="text-sm font-medium text-gray-700 mb-3">Venue Recommendations:</p>
-                      <div className="space-y-3 mb-4">
-                        {/* Option 1: Chuck-e-cheese */}
-                        <div className="p-4 bg-white border border-gray-200 rounded-lg">
-                          <div className="flex items-start justify-between mb-2">
-                            <div className="flex-1">
-                              <h4 className="font-medium text-gray-900 mb-2">Chuck-e-cheese</h4>
-                              <div className="space-y-1 text-sm text-gray-600">
-                                <div className="flex items-center gap-2">
-                                  <Phone className="h-4 w-4 text-gray-500" />
-                                  <span>(555) 123-4567</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <Mail className="h-4 w-4 text-gray-500" />
-                                  <span>info@chuckecheese.com</span>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
+                ) : task.title.toLowerCase().includes('book venue') ? (() => {
+                  const taskVenueKey = `${task.id}-venue`;
+                  const selectedVenue = selectedVenues[taskVenueKey] || '';
+                  
+                  const venues = [
+                    {
+                      id: 'chuckecheese',
+                      name: 'Chuck-e-cheese',
+                      phone: '(555) 123-4567',
+                      email: 'info@chuckecheese.com'
+                    },
+                    {
+                      id: 'option2',
+                      name: 'Option 2',
+                      phone: null,
+                      email: 'venue@example.com'
+                    }
+                  ];
 
-                        {/* Option 2: Dummy venue */}
-                        <div className="p-4 bg-white border border-gray-200 rounded-lg">
-                          <div className="flex items-start justify-between mb-2">
-                            <div className="flex-1">
-                              <h4 className="font-medium text-gray-900 mb-2">Option 2</h4>
-                              <div className="space-y-1 text-sm text-gray-600">
-                                <div className="flex items-center gap-2">
-                                  <Mail className="h-4 w-4 text-gray-500" />
-                                  <span>venue@example.com</span>
+                  const handleVenueSelect = (venueId: string) => {
+                    setSelectedVenues(prev => ({
+                      ...prev,
+                      [taskVenueKey]: venueId
+                    }));
+                  };
+
+                  const selectedVenueData = venues.find(v => v.id === selectedVenue);
+                  const canCall = selectedVenueData && selectedVenueData.phone;
+
+                  return (
+                    <div className="pt-4 border-t">
+                      <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                        <p className="text-sm font-medium text-gray-700 mb-3">Venue Recommendations:</p>
+                        <div className="space-y-3 mb-4">
+                          {venues.map((venue) => (
+                            <div 
+                              key={venue.id}
+                              className={`p-4 bg-white border rounded-lg cursor-pointer transition-all ${
+                                selectedVenue === venue.id 
+                                  ? 'border-blue-500 bg-blue-50' 
+                                  : 'border-gray-200 hover:border-gray-300'
+                              }`}
+                              onClick={() => handleVenueSelect(venue.id)}
+                            >
+                              <div className="flex items-start gap-3">
+                                <input
+                                  type="radio"
+                                  name={`venue-${task.id}`}
+                                  checked={selectedVenue === venue.id}
+                                  onChange={() => handleVenueSelect(venue.id)}
+                                  className="mt-1 w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                                />
+                                <div className="flex-1">
+                                  <h4 className="font-medium text-gray-900 mb-2">{venue.name}</h4>
+                                  <div className="space-y-1 text-sm text-gray-600">
+                                    {venue.phone && (
+                                      <div className="flex items-center gap-2">
+                                        <Phone className="h-4 w-4 text-gray-500" />
+                                        <span>{venue.phone}</span>
+                                      </div>
+                                    )}
+                                    <div className="flex items-center gap-2">
+                                      <Mail className="h-4 w-4 text-gray-500" />
+                                      <span>{venue.email}</span>
+                                    </div>
+                                  </div>
                                 </div>
                               </div>
                             </div>
-                          </div>
+                          ))}
                         </div>
-                      </div>
-                      <Button
-                        onClick={() => {
-                          // Place a call - in a real app, this would initiate a phone call
-                          window.location.href = 'tel:+15551234567';
-                        }}
-                        className="w-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white mb-4"
-                      >
-                        <Phone className="mr-2 h-4 w-4" />
-                        Place a Call
-                      </Button>
-                      <div className="flex gap-3">
                         <Button
-                          variant="outline"
-                          onClick={() => onTaskUpdate(task.eventId, task.id, 'issue')}
-                          className="flex-1 border-red-300 text-red-700 hover:bg-red-50"
+                          onClick={() => {
+                            if (canCall && selectedVenueData) {
+                              // Place a call to the selected venue
+                              const phoneNumber = selectedVenueData.phone!.replace(/\D/g, '');
+                              window.location.href = `tel:+1${phoneNumber}`;
+                            }
+                          }}
+                          disabled={!canCall}
+                          className="w-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white disabled:opacity-50 disabled:cursor-not-allowed mb-4"
                         >
-                          <X className="mr-2 h-4 w-4" />
-                          Reject
+                          <Phone className="mr-2 h-4 w-4" />
+                          {canCall ? `Place a Call to ${selectedVenueData?.name}` : 'Select a venue with phone number'}
                         </Button>
-                        <Button
-                          onClick={() => onTaskUpdate(task.eventId, task.id, 'approved')}
-                          className="flex-1 bg-green-600 hover:bg-green-700"
-                        >
-                          <CheckCircle2 className="mr-2 h-4 w-4" />
-                          Approve
-                        </Button>
+                        <div className="flex gap-3">
+                          <Button
+                            variant="outline"
+                            onClick={() => onTaskUpdate(task.eventId, task.id, 'issue')}
+                            className="flex-1 border-red-300 text-red-700 hover:bg-red-50"
+                          >
+                            <X className="mr-2 h-4 w-4" />
+                            Reject
+                          </Button>
+                          <Button
+                            onClick={() => onTaskUpdate(task.eventId, task.id, 'approved')}
+                            className="flex-1 bg-green-600 hover:bg-green-700"
+                          >
+                            <CheckCircle2 className="mr-2 h-4 w-4" />
+                            Approve
+                          </Button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ) : (
+                  );
+                })() : (
                   <div className="flex gap-3 pt-4 border-t">
                     <Button
                       variant="outline"
