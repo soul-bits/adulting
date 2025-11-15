@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { X, Send, Mic, Sparkles } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
