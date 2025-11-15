@@ -59,21 +59,10 @@ export async function GET(request: NextRequest) {
       console.log('[OAuth Callback] Set WEBHOOK_URL in .env.local to enable webhooks');
     }
 
-    // Try to automatically start monitoring if tokens are available
-    let monitoringStarted = false;
-    try {
-      const { initializeCalendarMonitoring } = await import('@/lib/calendar/monitor-init');
-      // Temporarily set tokens for initialization
-      if (tokens.access_token) {
-        process.env.GOOGLE_ACCESS_TOKEN = tokens.access_token;
-      }
-      if (tokens.refresh_token) {
-        process.env.GOOGLE_REFRESH_TOKEN = tokens.refresh_token;
-      }
-      monitoringStarted = await initializeCalendarMonitoring();
-    } catch (error) {
-      console.error('[OAuth Callback] Failed to start monitoring:', error);
-    }
+    // NOTE: Calendar monitoring is disabled. UI handles all calendar fetching.
+    // Calendar events are fetched every 5 minutes by the frontend (app/page.tsx).
+    // Planning agents only work when events are shown in the UI.
+    console.log('[OAuth Callback] ℹ️  Calendar monitoring disabled. UI handles all calendar fetching.');
 
     // In a real app, you'd store these tokens securely (database, session, etc.)
     // For testing, we'll return them (in production, redirect to a page that stores them)

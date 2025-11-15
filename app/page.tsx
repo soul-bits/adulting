@@ -26,6 +26,8 @@ export default function Home() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
   // Fetch calendar events on component mount and every 5 minutes
+  // NOTE: This is the ONLY place calendar events are fetched automatically.
+  // Background monitoring is disabled - all calendar fetching happens here in the UI.
   useEffect(() => {
     async function fetchEvents() {
       try {
@@ -64,7 +66,7 @@ export default function Home() {
     // Fetch immediately on mount
     fetchEvents();
     
-    // Then fetch every 5 minutes (300000ms) - matches background watcher cadence
+    // Then fetch every 5 minutes (300000ms) - this is the ONLY automatic calendar fetching
     const intervalId = setInterval(() => {
       console.log('[Page] 🔄 Refreshing calendar events (5 min interval)...');
       fetchEvents();
