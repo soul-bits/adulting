@@ -101,3 +101,6 @@ Desktop.ini
 *.temp
 .cache/
 
+# Data files (processed events tracking)
+data/processed-events.json
+

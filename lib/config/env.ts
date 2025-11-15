@@ -41,6 +41,9 @@ export const GMAIL_REFRESH_TOKEN = process.env.GMAIL_REFRESH_TOKEN;
 export const GOOGLE_ACCESS_TOKEN = process.env.GOOGLE_ACCESS_TOKEN;
 export const GOOGLE_REFRESH_TOKEN = process.env.GOOGLE_REFRESH_TOKEN;
 
+// Browser-Use Configuration (for web automation)
+export const BROWSER_USE_API_KEY = process.env.BROWSER_USE_API_KEY;
+
 // Next.js Public Configuration
 export const NEXT_PUBLIC_APP_URL = getEnv('NEXT_PUBLIC_APP_URL', 'http://localhost:3000');
 
@@ -98,6 +101,9 @@ export const env = {
   googleCalendar: {
     accessToken: GOOGLE_ACCESS_TOKEN,
     refreshToken: GOOGLE_REFRESH_TOKEN,
+  },
+  browserUse: {
+    apiKey: BROWSER_USE_API_KEY,
   },
   nextjs: {
     appUrl: NEXT_PUBLIC_APP_URL,

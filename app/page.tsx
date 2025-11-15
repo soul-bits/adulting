@@ -61,6 +61,68 @@ export default function Home() {
     fetchEvents();
   }, []);
 
+  // Process birthday events after they're loaded
+  useEffect(() => {
+    async function processBirthdayEvents() {
+      // Only process if events are loaded and not loading
+      if (loading || events.length === 0) {
+        return;
+      }
+
+      console.log('[Page] 🎂 Checking for birthday events to process...');
+
+      for (const event of events) {
+        try {
+          // Call API route to process birthday event (server-side)
+          // The API will check if it's a birthday event and if it's already been processed
+          console.log(`[Page] 🎯 Checking event: "${event.title}"`);
+          
+          const response = await fetch('/api/events/process-birthday', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ event }),
+          });
+
+          const data = await response.json();
+
+          if (data.success && data.task) {
+            // Add/update task in event
+            const task = data.task;
+            setEvents(prevEvents =>
+              prevEvents.map(e =>
+                e.id === event.id
+                  ? { 
+                      ...e, 
+                      tasks: e.tasks.some(t => t.id === task.id) 
+                        ? e.tasks.map(t => t.id === task.id ? { ...t, ...task } : t)
+                        : [...e.tasks, task]
+                    }
+                  : e
+              )
+            );
+            console.log(`[Page] ✅ Task created/updated for event: "${event.title}"`);
+          } else if (data.processed === false) {
+            console.log(`[Page] ⏭️  Event "${event.title}" already processed or not a birthday event`);
+          } else {
+            console.log(`[Page] ⚠️  Failed to process event "${event.title}": ${data.message || 'Unknown error'}`);
+          }
+        } catch (error) {
+          console.error(`[Page] ❌ Error processing birthday event "${event.title}":`, error);
+          // Continue processing other events even if one fails
+        }
+      }
+    }
+
+    // Process birthday events after a short delay to ensure events are set
+    const timer = setTimeout(() => {
+      processBirthdayEvents();
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [events, loading]);
+
   const handleEventSelect = (event: EventType) => {
     setSelectedEvent(event);
     setCurrentView('event');

@@ -1,9 +1,11 @@
 'use client';
 
-import { Calendar as CalendarIcon, Sparkles, CheckCircle2, Clock, AlertCircle, MessageSquare, ListTodo, ClipboardCheck } from 'lucide-react';
+import { useState } from 'react';
+import { Calendar as CalendarIcon, Sparkles, CheckCircle2, Clock, AlertCircle, MessageSquare, ListTodo, ClipboardCheck, Search } from 'lucide-react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
+import { Input } from './ui/input';
 import { EventType, Notification, ViewType } from '@/lib/types';
 import { MiniCalendar } from './MiniCalendar';
 import { NotificationCard } from './NotificationCard';
@@ -34,9 +36,20 @@ export function Dashboard({
   onDismissNotification,
   onRetry
 }: DashboardProps) {
+  const [searchQuery, setSearchQuery] = useState('');
+  
   const upcomingEvents = events
     .filter(e => e.date >= new Date())
     .sort((a, b) => a.date.getTime() - b.date.getTime())
+    .filter(event => {
+      if (!searchQuery.trim()) return true;
+      const query = searchQuery.toLowerCase();
+      return (
+        event.title.toLowerCase().includes(query) ||
+        event.location?.toLowerCase().includes(query) ||
+        event.participants?.some(p => p.toLowerCase().includes(query))
+      );
+    })
     .slice(0, 5);
 
   const pendingTasks = events.reduce((acc, event) => {
@@ -153,6 +166,20 @@ export function Dashboard({
               <Button variant="ghost" size="sm">View All</Button>
             </div>
             
+            {/* Search Filter */}
+            <div className="mb-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  type="text"
+                  placeholder="Search events by title, location, or participants..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+            </div>
+            
             {loading && (
               <div className="flex flex-col items-center justify-center py-12">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mb-3"></div>
@@ -178,11 +205,25 @@ export function Dashboard({
             )}
             
             {!loading && !error && (
-              <div className="space-y-3">
+            <div className="space-y-3">
                 {upcomingEvents.length === 0 ? (
                   <div className="text-center py-12 text-gray-500">
                     <CalendarIcon className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-                    <p className="text-sm">No upcoming events</p>
+                    <p className="text-sm">
+                      {searchQuery.trim() 
+                        ? `No events found matching "${searchQuery}"`
+                        : 'No upcoming events'}
+                    </p>
+                    {searchQuery.trim() && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setSearchQuery('')}
+                        className="mt-2"
+                      >
+                        Clear search
+                      </Button>
+                    )}
                   </div>
                 ) : (
                   upcomingEvents.map(event => (
@@ -264,7 +305,7 @@ export function Dashboard({
                 </div>
                   ))
                 )}
-              </div>
+            </div>
             )}
           </Card>
         </div>
@@ -279,15 +320,15 @@ export function Dashboard({
 
           {/* Alfred Suggestions */}
           {upcomingEvents.length > 0 && (
-            <Card className="p-6 bg-gradient-to-br from-indigo-50 to-purple-50 border-indigo-200">
-              <div className="flex items-center gap-2 mb-4">
-                <Sparkles className="h-5 w-5 text-indigo-600" />
+          <Card className="p-6 bg-gradient-to-br from-indigo-50 to-purple-50 border-indigo-200">
+            <div className="flex items-center gap-2 mb-4">
+              <Sparkles className="h-5 w-5 text-indigo-600" />
                 <h2 className="text-xl">Upcoming Events</h2>
-              </div>
-              <div className="space-y-3">
+            </div>
+            <div className="space-y-3">
                 {upcomingEvents.slice(0, 3).map((event, index) => (
                   <div key={event.id} className="p-3 bg-white rounded-lg border border-indigo-200">
-                    <p className="text-sm mb-2">
+                <p className="text-sm mb-2">
                       📅 <strong>{event.title}</strong> - {event.date.toLocaleDateString('en-US', {
                         month: 'short',
                         day: 'numeric',
@@ -295,19 +336,19 @@ export function Dashboard({
                         minute: '2-digit'
                       })}
                       {event.location && ` at ${event.location}`}
-                    </p>
-                    <Button
-                      size="sm"
-                      variant="outline"
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
                       onClick={() => onEventSelect(event)}
-                      className="w-full"
-                    >
-                      View Details
-                    </Button>
-                  </div>
-                ))}
+                  className="w-full"
+                >
+                  View Details
+                </Button>
               </div>
-            </Card>
+                ))}
+            </div>
+          </Card>
           )}
 
           {/* Notifications */}

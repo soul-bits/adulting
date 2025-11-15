@@ -113,8 +113,9 @@ async function processWebhookNotification(
 
 /**
  * Process webhook with access token (called from authenticated context)
+ * Note: This is a helper function, not exported as a route handler
  */
-export async function processWebhookWithToken(
+async function processWebhookWithToken(
   accessToken: string,
   refreshToken: string | undefined,
   state: string | null
