@@ -15,12 +15,12 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
-    let accessToken = searchParams.get('accessToken');
-    let refreshToken = searchParams.get('refreshToken') || undefined;
+    let accessToken: string | null = searchParams.get('accessToken');
+    let refreshToken: string | undefined = searchParams.get('refreshToken') || undefined;
 
     // If no token provided, try to use environment variables
     if (!accessToken) {
-      accessToken = env.googleCalendar.accessToken || undefined;
+      accessToken = env.googleCalendar.accessToken || null;
       refreshToken = env.googleCalendar.refreshToken || undefined;
     }
 

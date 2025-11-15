@@ -88,7 +88,7 @@ export default function Home() {
       
       // Track updated events as we process them
       const updatedEvents = new Map<string, EventType>();
-      events.forEach(event => updatedEvents.set(event.id, event));
+      events.forEach((event: EventType) => updatedEvents.set(event.id, event));
 
       for (const event of events) {
         try {
@@ -131,8 +131,8 @@ export default function Home() {
             updatedEvents.set(event.id, updatedEvent);
 
             // Update state
-            setEvents(prevEvents =>
-              prevEvents.map(e => {
+            setEvents((prevEvents: EventType[]) =>
+              prevEvents.map((e: EventType) => {
                 if (e.id === event.id) {
                   // Double-check: don't modify if tasks already exist
                   if (e.tasks && e.tasks.length > 0) {
@@ -205,13 +205,13 @@ export default function Home() {
           if (data.success && data.task) {
             // Add/update task in event
             const task = data.task;
-            setEvents(prevEvents =>
-              prevEvents.map(e =>
+            setEvents((prevEvents: EventType[]) =>
+              prevEvents.map((e: EventType) =>
                 e.id === event.id
                   ? { 
                       ...e, 
-                      tasks: e.tasks.some(t => t.id === task.id) 
-                        ? e.tasks.map(t => t.id === task.id ? { ...t, ...task } : t)
+                      tasks: e.tasks.some((t: Task) => t.id === task.id) 
+                        ? e.tasks.map((t: Task) => t.id === task.id ? { ...t, ...task } : t)
                         : [...e.tasks, task]
                     }
                   : e
@@ -251,12 +251,12 @@ export default function Home() {
   };
 
   const handleTaskUpdate = (eventId: string, taskId: string, newStatus: Task['status']) => {
-    setEvents(prevEvents =>
-      prevEvents.map(event =>
+    setEvents((prevEvents: EventType[]) =>
+      prevEvents.map((event: EventType) =>
         event.id === eventId
           ? {
               ...event,
-              tasks: event.tasks.map(task =>
+              tasks: event.tasks.map((task: Task) =>
                 task.id === taskId ? { ...task, status: newStatus } : task
               )
             }
@@ -266,7 +266,7 @@ export default function Home() {
   };
 
   const handleDismissNotification = (notificationId: string) => {
-    setNotifications(prev => prev.filter(n => n.id !== notificationId));
+    setNotifications((prev: Notification[]) => prev.filter((n: Notification) => n.id !== notificationId));
   };
 
   const handleBackToDashboard = () => {

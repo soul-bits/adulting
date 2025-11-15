@@ -36,7 +36,7 @@ function calculateDuration(start: any, end: any): string {
 /**
  * Helper function to format date/time
  */
-function formatDateTime(dateTime?: string, date?: string): string {
+function formatDateTime(dateTime?: string | null, date?: string | null): string {
   if (dateTime) {
     const dt = new Date(dateTime);
     return dt.toLocaleString();
@@ -154,10 +154,14 @@ async function processWebhookWithToken(
       const partial = convertGoogleEventToEventType(googleEvent);
       if (partial.id && partial.title && partial.date) {
         const event: EventType = {
-          ...partial,
+          id: partial.id,
+          title: partial.title,
+          date: partial.date,
           type: 'other',
           status: 'pending',
           tasks: [],
+          location: partial.location,
+          participants: partial.participants,
         };
 
         console.log(`\n[Webhook] 🎯 Processing event: "${event.title}"`);
