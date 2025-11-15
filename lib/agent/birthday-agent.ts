@@ -86,10 +86,14 @@ export async function processBirthdayEvent(
   try {
     console.log(`\n[Birthday Agent] 🎂 Processing birthday event: "${event.title}"`);
     
-    // Check if event has already been processed
-    const alreadyProcessed = await isEventProcessed(event.id);
-    if (alreadyProcessed) {
-      console.log(`[Birthday Agent] ⏭️  Event ${event.id} already processed, skipping`);
+    // Check if birthday agent has already processed this event
+    // Look for a task created by this agent (starts with "task-birthday-dress-")
+    const birthdayTaskExists = event.tasks?.some(task => 
+      task.id.startsWith(`task-birthday-dress-${event.id}`)
+    );
+    
+    if (birthdayTaskExists) {
+      console.log(`[Birthday Agent] ⏭️  Event ${event.id} already processed by birthday agent, skipping`);
       return;
     }
     
@@ -188,10 +192,14 @@ export async function processBirthdayEvent(
  * @returns true if event should be processed by birthday agent
  */
 export async function shouldProcessBirthdayEvent(event: EventType): Promise<boolean> {
-  // Check if already processed
-  const alreadyProcessed = await isEventProcessed(event.id);
-  if (alreadyProcessed) {
-    return false;
+  // Check if birthday agent has already processed this event
+  // Look for a task created by this agent (starts with "task-birthday-dress-")
+  const birthdayTaskExists = event.tasks?.some(task => 
+    task.id.startsWith(`task-birthday-dress-${event.id}`)
+  );
+  
+  if (birthdayTaskExists) {
+    return false; // Already processed by birthday agent
   }
   
   // Check if it's a birthday event
