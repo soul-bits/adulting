@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Send, Mic, Sparkles } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 
@@ -14,6 +15,14 @@ type Message = {
   sender: 'user' | 'alfred';
   text: string;
   timestamp: Date;
+};
+
+type ExtractedDateTime = {
+  date?: string | null;
+  time?: string | null;
+  datetime?: string | null;
+  hasDate: boolean;
+  hasTime: boolean;
 };
 
 /**
@@ -30,6 +39,7 @@ export function AlfredChat({ onClose }: AlfredChatProps) {
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [extractedDateTime, setExtractedDateTime] = useState<ExtractedDateTime | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -81,6 +91,11 @@ export function AlfredChat({ onClose }: AlfredChatProps) {
         timestamp: new Date()
       };
       setMessages(prev => [...prev, alfredMessage]);
+      
+      // Update extracted date/time if found
+      if (data.extractedDateTime && (data.extractedDateTime.hasDate || data.extractedDateTime.hasTime)) {
+        setExtractedDateTime(data.extractedDateTime);
+      }
     } catch (error) {
       console.error('Error getting AI response:', error);
       // Fallback response on error
@@ -143,7 +158,28 @@ export function AlfredChat({ onClose }: AlfredChatProps) {
                     : 'bg-gray-100 text-gray-900'
                 }`}
               >
-                <p className="whitespace-pre-line text-sm">{message.text}</p>
+                {message.sender === 'alfred' ? (
+                  <div className="prose prose-sm max-w-none">
+                    <ReactMarkdown
+                      components={{
+                        p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                        ul: ({ children }) => <ul className="list-disc list-inside mb-2 space-y-1">{children}</ul>,
+                        ol: ({ children }) => <ol className="list-decimal list-inside mb-2 space-y-1">{children}</ol>,
+                        li: ({ children }) => <li className="ml-2">{children}</li>,
+                        strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                        em: ({ children }) => <em className="italic">{children}</em>,
+                        code: ({ children }) => <code className="bg-gray-200 px-1 py-0.5 rounded text-xs font-mono">{children}</code>,
+                        h1: ({ children }) => <h1 className="text-lg font-bold mb-2 mt-3 first:mt-0">{children}</h1>,
+                        h2: ({ children }) => <h2 className="text-base font-bold mb-2 mt-3 first:mt-0">{children}</h2>,
+                        h3: ({ children }) => <h3 className="text-sm font-bold mb-1 mt-2 first:mt-0">{children}</h3>,
+                      }}
+                    >
+                      {message.text}
+                    </ReactMarkdown>
+                  </div>
+                ) : (
+                  <p className="whitespace-pre-line text-sm">{message.text}</p>
+                )}
                 <p className="text-xs opacity-70 mt-1">
                   {message.timestamp.toLocaleTimeString('en-US', {
                     hour: 'numeric',
@@ -168,6 +204,38 @@ export function AlfredChat({ onClose }: AlfredChatProps) {
 
           <div ref={messagesEndRef} />
         </div>
+
+        {/* Extracted Date/Time Display */}
+        {extractedDateTime && (extractedDateTime.hasDate || extractedDateTime.hasTime) && (
+          <div className="px-4 pb-2 border-t bg-indigo-50">
+            <p className="text-xs font-semibold text-indigo-900 mb-1 mt-2">📅 Extracted Information:</p>
+            <div className="flex gap-3 text-xs text-indigo-700">
+              {extractedDateTime.hasDate && extractedDateTime.date && (
+                <span>Date: {new Date(extractedDateTime.date).toLocaleDateString('en-US', { 
+                  weekday: 'short', 
+                  year: 'numeric', 
+                  month: 'short', 
+                  day: 'numeric' 
+                })}</span>
+              )}
+              {extractedDateTime.hasTime && extractedDateTime.time && (
+                <span>Time: {extractedDateTime.time}</span>
+              )}
+              {extractedDateTime.datetime && (
+                <span className="text-indigo-600 font-medium">
+                  {new Date(extractedDateTime.datetime).toLocaleString('en-US', {
+                    weekday: 'short',
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: 'numeric',
+                    minute: '2-digit'
+                  })}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Quick Prompts */}
         {messages.length === 1 && (
