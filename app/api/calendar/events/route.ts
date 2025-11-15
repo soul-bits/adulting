@@ -105,11 +105,21 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { accessToken, refreshToken, eventData } = body;
+    let { accessToken, refreshToken, eventData } = body;
+
+    // If no token provided, try to use environment variables
+    if (!accessToken) {
+      accessToken = env.googleCalendar.accessToken || null;
+      refreshToken = env.googleCalendar.refreshToken || undefined;
+    }
 
     if (!accessToken) {
       return NextResponse.json(
-        { error: 'Access token is required' },
+        { 
+          error: 'Access token is required',
+          message: 'Either provide accessToken in the request body, or set GOOGLE_ACCESS_TOKEN in .env.local',
+          authUrl: '/api/calendar/auth'
+        },
         { status: 401 }
       );
     }
@@ -121,8 +131,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    console.log('[Calendar API] Creating event:', eventData.summary);
     const calendarClient = getCalendarClient(accessToken, refreshToken);
     const createdEvent = await createCalendarEvent(calendarClient, eventData);
+
+    console.log('[Calendar API] Event created successfully:', createdEvent.id);
 
     return NextResponse.json({
       success: true,
@@ -130,6 +143,21 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Error creating calendar event:', error);
+    
+    // Provide helpful error messages
+    if (error instanceof Error) {
+      if (error.message.includes('invalid_grant') || error.message.includes('token')) {
+        return NextResponse.json(
+          { 
+            error: 'Authentication token expired or invalid',
+            message: 'Please re-authenticate by visiting /api/calendar/auth',
+            authUrl: '/api/calendar/auth'
+          },
+          { status: 401 }
+        );
+      }
+    }
+    
     return NextResponse.json(
       { 
         error: 'Failed to create calendar event',

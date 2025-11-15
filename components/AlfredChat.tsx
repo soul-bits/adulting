@@ -352,7 +352,10 @@ export function AlfredChat({ onClose }: AlfredChatProps) {
   };
 
   const handleApproveSelection = async () => {
-    if (!proposals) return;
+    if (!proposals || !extractedDateTime?.date) {
+      console.error('Missing proposals or date');
+      return;
+    }
     
     const formatTime = (time24: string) => {
       if (!time24) return '';
@@ -363,81 +366,141 @@ export function AlfredChat({ onClose }: AlfredChatProps) {
       return `${hour12}:${minutes} ${ampm}`;
     };
 
-    let approvalText = '';
-    
-    // Build approval text based on selections
-    if (selectedTimeIndex !== null && proposals.timeProposals && proposals.timeProposals[selectedTimeIndex]) {
-      const timeOption = proposals.timeProposals[selectedTimeIndex];
-      approvalText += `I approve the time: ${formatTime(timeOption.startTime)} - ${formatTime(timeOption.endTime)}`;
-    }
-    
-    if (selectedVenueIndex !== null && proposals.venueProposals && proposals.venueProposals[selectedVenueIndex]) {
-      const venue = proposals.venueProposals[selectedVenueIndex];
-      if (approvalText) {
-        approvalText += ` and the venue: ${venue.name}`;
-      } else {
-        approvalText = `I approve the venue: ${venue.name}`;
-      }
+    // Get selected time and venue
+    const selectedTime = selectedTimeIndex !== null && proposals.timeProposals && proposals.timeProposals[selectedTimeIndex]
+      ? proposals.timeProposals[selectedTimeIndex]
+      : null;
+    const selectedVenue = selectedVenueIndex !== null && proposals.venueProposals && proposals.venueProposals[selectedVenueIndex]
+      ? proposals.venueProposals[selectedVenueIndex]
+      : null;
+
+    if (!selectedTime) {
+      console.error('No time selected');
+      return;
     }
 
-    if (!approvalText) return; // Nothing selected
-    
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      sender: 'user',
-      text: approvalText,
-      timestamp: new Date()
-    };
-
-    setMessages(prev => [...prev, userMessage]);
     setIsTyping(true);
-    
-    // Reset selections
-    setSelectedTimeIndex(null);
-    setSelectedVenueIndex(null);
 
     try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          messages: [...messages, userMessage].map(msg => ({
-            sender: msg.sender,
-            text: msg.text,
-          })),
-        }),
-      });
+      // Step 1: Generate event title and description using LLM
+      let eventTitle = '';
+      let eventDescription = '';
+      
+      try {
+        const generateResponse = await fetch('/api/events/generate-details', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            chatContext: messages.map(msg => ({
+              sender: msg.sender,
+              text: msg.text,
+            })),
+            selectedTime: selectedTime ? `${formatTime(selectedTime.startTime)} - ${formatTime(selectedTime.endTime)}` : null,
+            selectedVenue: selectedVenue,
+            extractedDate: extractedDateTime.date,
+            preferences: proposals.preferences,
+          }),
+        });
 
-      if (!response.ok) {
-        throw new Error('Failed to get response from AI');
+        if (generateResponse.ok) {
+          const generateData = await generateResponse.json();
+          eventTitle = generateData.title || 'Event';
+          eventDescription = generateData.description || '';
+        } else {
+          throw new Error('Failed to generate event details');
+        }
+      } catch (error) {
+        console.error('Error generating event details:', error);
+        // Fallback to simple title/description
+        eventTitle = selectedVenue ? `${selectedVenue.name} Event` : 'Event';
+        eventDescription = `Event scheduled for ${extractedDateTime.date}`;
+        if (selectedVenue) {
+          eventDescription += `\n\nVenue: ${selectedVenue.name}`;
+          if (selectedVenue.address) {
+            eventDescription += `\nAddress: ${selectedVenue.address}`;
+          }
+          if (selectedVenue.website) {
+            eventDescription += `\nWebsite: ${selectedVenue.website}`;
+          }
+        }
       }
 
-      const data = await response.json();
-      const alfredMessage: Message = {
+      // Step 2: Create calendar event
+      try {
+        // Build datetime strings in ISO format
+        const eventDate = new Date(extractedDateTime.date);
+        const [startHours, startMinutes] = selectedTime.startTime.split(':');
+        const [endHours, endMinutes] = selectedTime.endTime.split(':');
+        
+        eventDate.setHours(parseInt(startHours), parseInt(startMinutes), 0, 0);
+        const startDateTime = eventDate.toISOString();
+        
+        eventDate.setHours(parseInt(endHours), parseInt(endMinutes), 0, 0);
+        const endDateTime = eventDate.toISOString();
+
+        // Build description with links
+        let fullDescription = eventDescription;
+        if (selectedVenue) {
+          if (selectedVenue.website) {
+            fullDescription += `\n\n📍 Venue Details:\n${selectedVenue.name}`;
+            if (selectedVenue.address) {
+              fullDescription += `\n${selectedVenue.address}`;
+            }
+            if (selectedVenue.phone) {
+              fullDescription += `\nPhone: ${selectedVenue.phone}`;
+            }
+            fullDescription += `\nWebsite: ${selectedVenue.website}`;
+          }
+        }
+
+        const eventData = {
+          summary: eventTitle,
+          description: fullDescription,
+          start: { dateTime: startDateTime },
+          end: { dateTime: endDateTime },
+          location: selectedVenue?.address || selectedVenue?.name || undefined,
+        };
+
+        const calendarResponse = await fetch('/api/calendar/events', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            eventData,
+            // Tokens will be read from environment variables if not provided
+          }),
+        });
+
+        if (!calendarResponse.ok) {
+          const errorData = await calendarResponse.json();
+          console.error('Error creating calendar event:', errorData);
+          throw new Error(errorData.message || 'Failed to create calendar event');
+        }
+
+        const calendarData = await calendarResponse.json();
+        console.log('Calendar event created:', calendarData);
+      } catch (error) {
+        console.error('Error creating calendar event:', error);
+        throw error; // Re-throw to show error to user
+      }
+
+      // Step 3: Close the chat
+      setIsTyping(false);
+      onClose();
+    } catch (error) {
+      console.error('Error in approval process:', error);
+      setIsTyping(false);
+      // Show error message
+      const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         sender: 'alfred',
-        text: data.message,
+        text: `Sorry, there was an error creating the calendar event. ${error instanceof Error ? error.message : 'Please try again.'}`,
         timestamp: new Date()
       };
-      
-      setMessages(prev => [...prev, alfredMessage]);
-      
-      if (data.extractedDateTime && (data.extractedDateTime.hasDate || data.extractedDateTime.hasTime)) {
-        setExtractedDateTime(data.extractedDateTime);
-      }
-      
-      if (data.proposals) {
-        setProposals(data.proposals);
-        // Reset selections when new proposals arrive
-        setSelectedTimeIndex(null);
-        setSelectedVenueIndex(null);
-      }
-    } catch (error) {
-      console.error('Error getting AI response:', error);
-    } finally {
-      setIsTyping(false);
+      setMessages(prev => [...prev, errorMessage]);
     }
   };
 
@@ -711,12 +774,20 @@ export function AlfredChat({ onClose }: AlfredChatProps) {
               <div className="mt-4 pt-4 border-t border-emerald-200">
                 <Button
                   onClick={handleApproveSelection}
-                  disabled={selectedTimeIndex === null && selectedVenueIndex === null}
+                  disabled={
+                    (selectedTimeIndex === null && selectedVenueIndex === null) ||
+                    !extractedDateTime?.date
+                  }
                   className="w-full bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-lg font-semibold shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Check className="h-5 w-5" />
                   Approve Selection
                 </Button>
+                {!extractedDateTime?.date && (
+                  <p className="text-xs text-gray-500 mt-2 text-center">
+                    Please wait for date information to be extracted
+                  </p>
+                )}
               </div>
             )}
 
