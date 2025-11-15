@@ -1,7 +1,10 @@
 /**
  * Calendar Event Watcher
  * 
- * Monitors Google Calendar for new or updated events and triggers analysis.
+ * Monitors Google Calendar for new or updated events.
+ * NOTE: This watcher only detects and logs events. It does NOT trigger planning.
+ * Planning is ONLY triggered by the UI when it fetches events.
+ * 
  * Can be used with polling or webhooks (push notifications).
  */
 

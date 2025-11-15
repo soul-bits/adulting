@@ -43,8 +43,12 @@ export async function initializeCalendarMonitoring(): Promise<boolean> {
       accessToken,
       refreshToken,
       async (events) => {
+        // NOTE: This callback only logs detected events.
+        // Planning/processing is ONLY triggered by the UI when it fetches events.
+        // This ensures planning happens only when the user sees the events.
         console.log('\n' + '='.repeat(80));
         console.log(`[Monitor] 🎯 NEW EVENTS DETECTED! Found ${events.length} event(s)`);
+        console.log('[Monitor] ℹ️  Events logged. Planning will occur when UI fetches events.');
         console.log('='.repeat(80));
         events.forEach((event, index) => {
           console.log(`\n[Monitor] Event ${index + 1}:`);
@@ -54,8 +58,6 @@ export async function initializeCalendarMonitoring(): Promise<boolean> {
           console.log(`  🆔 ID: ${event.id}`);
         });
         console.log('\n' + '='.repeat(80) + '\n');
-        
-        // TODO: Trigger event analysis, task generation, etc.
       },
       5 * 60 * 1000 // 5 minutes - safe from rate limits
     );

@@ -25,13 +25,14 @@ export default function Home() {
   const [events, setEvents] = useState<EventType[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
-  // Fetch calendar events on component mount
+  // Fetch calendar events on component mount and every 5 minutes
   useEffect(() => {
     async function fetchEvents() {
       try {
         setLoading(true);
         setError(null);
         
+        console.log('[Page] 📅 Fetching calendar events...');
         const response = await fetch('/api/calendar/events');
         const data = await response.json();
         
@@ -46,6 +47,7 @@ export default function Home() {
             date: new Date(event.date),
           }));
           setEvents(eventsWithDates);
+          console.log(`[Page] ✅ Loaded ${eventsWithDates.length} event(s)`);
         } else {
           setEvents([]);
         }
@@ -58,7 +60,16 @@ export default function Home() {
       }
     }
     
+    // Fetch immediately on mount
     fetchEvents();
+    
+    // Then fetch every 5 minutes (300000ms) - matches background watcher cadence
+    const intervalId = setInterval(() => {
+      console.log('[Page] 🔄 Refreshing calendar events (5 min interval)...');
+      fetchEvents();
+    }, 5 * 60 * 1000);
+    
+    return () => clearInterval(intervalId);
   }, []);
 
   // Process birthday events after they're loaded
