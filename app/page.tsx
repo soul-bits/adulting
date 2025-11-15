@@ -41,10 +41,11 @@ export default function Home() {
         }
         
         if (data.success && data.events) {
-          // Convert date strings to Date objects
+          // Convert date strings to Date objects and ensure tasks array exists
           const eventsWithDates = data.events.map((event: any) => ({
             ...event,
-            date: new Date(event.date),
+            date: event.date ? new Date(event.date) : new Date(),
+            tasks: event.tasks || [], // Ensure tasks array exists
           }));
           setEvents(eventsWithDates);
           console.log(`[Page] ✅ Loaded ${eventsWithDates.length} event(s)`);
@@ -72,7 +73,91 @@ export default function Home() {
     return () => clearInterval(intervalId);
   }, []);
 
-  // Process birthday events after they're loaded
+  // Trigger planning agent for BIRTHDAY events when they're loaded
+  useEffect(() => {
+    async function planBirthdayEvents() {
+      // Only process if events are loaded and not loading
+      if (loading || events.length === 0) {
+        return;
+      }
+
+      console.log('[Page] 🤖 Planning Agent: Checking for birthday events to plan...');
+
+      for (const event of events) {
+        try {
+          // CRITICAL: Skip if event already has tasks - do NOT modify existing tasks
+          if (event.tasks && event.tasks.length > 0) {
+            console.log(`[Page] ⏭️  Event "${event.title}" already has ${event.tasks.length} task(s), skipping (no changes)`);
+            continue;
+          }
+
+          // Quick check: only process events that might be birthdays
+          // The API will do the full analysis, but we can skip obvious non-birthdays
+          const titleLower = event.title.toLowerCase();
+          const mightBeBirthday = titleLower.includes('birthday') || 
+                                  titleLower.includes('birth') ||
+                                  event.type === 'birthday';
+
+          if (!mightBeBirthday) {
+            console.log(`[Page] ⏭️  Event "${event.title}" doesn't appear to be a birthday, skipping`);
+            continue;
+          }
+
+          console.log(`[Page] 🎯 Planning birthday event: "${event.title}"`);
+          
+          // Call planning API route (will verify it's a birthday event)
+          const response = await fetch('/api/events/plan', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ event }),
+          });
+
+          const data = await response.json();
+
+          if (data.success && data.tasks && data.tasks.length > 0) {
+            // Add tasks to event (only if event doesn't already have tasks)
+            setEvents(prevEvents =>
+              prevEvents.map(e => {
+                if (e.id === event.id) {
+                  // Double-check: don't modify if tasks already exist
+                  if (e.tasks && e.tasks.length > 0) {
+                    console.log(`[Page] ⚠️  Event "${event.title}" already has tasks, not modifying`);
+                    return e;
+                  }
+                  return { 
+                    ...e, 
+                    tasks: [...(e.tasks || []), ...data.tasks]
+                  };
+                }
+                return e;
+              })
+            );
+            console.log(`[Page] ✅ Generated ${data.tasks.length} task(s) for birthday event: "${event.title}"`);
+          } else if (data.alreadyPlanned) {
+            console.log(`[Page] ⏭️  Event "${event.title}" already planned`);
+          } else if (data.skipped) {
+            console.log(`[Page] ⏭️  Event "${event.title}" is ${data.eventType}, not birthday - skipped`);
+          } else {
+            console.log(`[Page] ⚠️  No tasks generated for event "${event.title}": ${data.message || 'Unknown reason'}`);
+          }
+        } catch (error) {
+          console.error(`[Page] ❌ Error planning event "${event.title}":`, error);
+          // Continue processing other events even if one fails
+        }
+      }
+    }
+
+    // Trigger planning after a short delay to ensure events are set
+    const timer = setTimeout(() => {
+      planBirthdayEvents();
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [events, loading]);
+
+  // Process birthday events after they're loaded (for special birthday agent actions)
   useEffect(() => {
     async function processBirthdayEvents() {
       // Only process if events are loaded and not loading
@@ -80,13 +165,25 @@ export default function Home() {
         return;
       }
 
-      console.log('[Page] 🎂 Checking for birthday events to process...');
+      console.log('[Page] 🎂 Birthday Agent: Checking for birthday events to process...');
 
       for (const event of events) {
         try {
-          // Call API route to process birthday event (server-side)
-          // The API will check if it's a birthday event and if it's already been processed
-          console.log(`[Page] 🎯 Checking event: "${event.title}"`);
+          // Only process birthday events that already have tasks (from planning)
+          // The birthday agent does special actions like Amazon shopping
+          if (!event.tasks || event.tasks.length === 0) {
+            continue; // Skip if not planned yet
+          }
+
+          // Check if it's a birthday event by looking at event type or title
+          const isBirthday = event.type === 'birthday' || 
+                            event.title.toLowerCase().includes('birthday');
+          
+          if (!isBirthday) {
+            continue;
+          }
+
+          console.log(`[Page] 🎯 Processing birthday event: "${event.title}"`);
           
           const response = await fetch('/api/events/process-birthday', {
             method: 'POST',
@@ -113,11 +210,11 @@ export default function Home() {
                   : e
               )
             );
-            console.log(`[Page] ✅ Task created/updated for event: "${event.title}"`);
+            console.log(`[Page] ✅ Birthday task created/updated for event: "${event.title}"`);
           } else if (data.processed === false) {
             console.log(`[Page] ⏭️  Event "${event.title}" already processed or not a birthday event`);
           } else {
-            console.log(`[Page] ⚠️  Failed to process event "${event.title}": ${data.message || 'Unknown error'}`);
+            console.log(`[Page] ⚠️  Failed to process birthday event "${event.title}": ${data.message || 'Unknown error'}`);
           }
         } catch (error) {
           console.error(`[Page] ❌ Error processing birthday event "${event.title}":`, error);
@@ -126,10 +223,10 @@ export default function Home() {
       }
     }
 
-    // Process birthday events after a short delay to ensure events are set
+    // Process birthday events after planning is done (delay longer to ensure planning completes)
     const timer = setTimeout(() => {
       processBirthdayEvents();
-    }, 1000);
+    }, 2000);
 
     return () => clearTimeout(timer);
   }, [events, loading]);
