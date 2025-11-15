@@ -14,6 +14,29 @@ import { mergeEventsHistory } from '@/lib/storage/event-history';
 import { EventType } from '@/lib/types';
 import { env } from '@/lib/config/env';
 
+/**
+ * List of event title patterns to exclude from the calendar
+ * Events whose titles contain any of these strings (case-insensitive) will be filtered out
+ */
+const EXCLUDED_EVENT_TITLES: string[] = [
+  'Designing Your Next Career Chapter',
+  // Add more event title patterns to exclude here
+  // Example: 'Weekly Standup',
+  // Example: 'Team Meeting',
+];
+
+/**
+ * Check if an event should be excluded based on its title
+ * @param eventTitle - The title of the event to check
+ * @returns true if the event should be excluded, false otherwise
+ */
+function shouldExcludeEvent(eventTitle: string): boolean {
+  const titleLower = eventTitle.toLowerCase();
+  return EXCLUDED_EVENT_TITLES.some(excludedTitle => 
+    titleLower.includes(excludedTitle.toLowerCase())
+  );
+}
+
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
@@ -63,9 +86,20 @@ export async function GET(request: NextRequest) {
     console.log(`[Calendar API] Successfully converted ${events.length} events`);
     console.log(`[Calendar API] Event titles:`, events.map(e => e.title).join(', '));
 
+    // Filter out events with excluded titles
+    const filteredEvents = events.filter(event => {
+      const shouldExclude = shouldExcludeEvent(event.title);
+      if (shouldExclude) {
+        console.log(`[Calendar API] ⏭️  Filtering out event: "${event.title}"`);
+      }
+      return !shouldExclude;
+    });
+
+    console.log(`[Calendar API] After filtering: ${filteredEvents.length} event(s) (filtered out ${events.length - filteredEvents.length})`);
+
     // Merge stored event history (tasks, planning status, etc.)
     console.log(`[Calendar API] Loading stored event history...`);
-    const eventsWithHistory = await mergeEventsHistory(events);
+    const eventsWithHistory = await mergeEventsHistory(filteredEvents);
     console.log(`[Calendar API] ✅ Merged event history for ${eventsWithHistory.length} event(s)`);
 
     return NextResponse.json({
