@@ -99,6 +99,18 @@ export function ApprovalPanel({ events, onBack, onTaskUpdate }: ApprovalPanelPro
                     </div>
                     <h2 className="text-xl mb-1">{task.title}</h2>
                     <p className="text-gray-600">{task.description}</p>
+                    {task.browserUseUrl && (
+                      <div className="mt-2">
+                        <a
+                          href={task.browserUseUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-blue-600 hover:text-blue-800 underline flex items-center gap-1"
+                        >
+                          🔗 View browser automation session
+                        </a>
+                      </div>
+                    )}
                   </div>
                   <Badge className="bg-yellow-100 text-yellow-700">
                     Needs Approval
@@ -161,11 +173,18 @@ export function ApprovalPanel({ events, onBack, onTaskUpdate }: ApprovalPanelPro
                     Modify
                   </Button>
                   <Button
-                    onClick={() => onTaskUpdate(task.eventId, task.id, 'approved')}
+                    onClick={() => {
+                      // If this is a dress ordering task with browser-use URL, open it
+                      if (task.id.startsWith('task-birthday-dress-') && task.browserUseUrl) {
+                        window.open(task.browserUseUrl, '_blank', 'noopener,noreferrer');
+                      }
+                      // Update task status to approved
+                      onTaskUpdate(task.eventId, task.id, 'approved');
+                    }}
                     className="flex-1 bg-green-600 hover:bg-green-700"
                   >
                     <CheckCircle2 className="mr-2 h-4 w-4" />
-                    Approve
+                    {task.id.startsWith('task-birthday-dress-') && task.browserUseUrl ? 'Approve & View Session' : 'Approve'}
                   </Button>
                 </div>
               </Card>

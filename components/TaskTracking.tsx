@@ -34,6 +34,14 @@ export function TaskTracking({ events, onBack, onEventSelect }: TaskTrackingProp
     : allTasks.filter(task => task.status === filterStatus);
 
   const sortedTasks = filteredTasks.sort((a, b) => {
+    // Prioritize dress ordering tasks (birthday agent tasks)
+    const aIsDressTask = a.id.startsWith('task-birthday-dress-');
+    const bIsDressTask = b.id.startsWith('task-birthday-dress-');
+    
+    if (aIsDressTask && !bIsDressTask) return -1;
+    if (!aIsDressTask && bIsDressTask) return 1;
+    
+    // Then sort by status
     const statusOrder = { suggested: 0, approved: 1, executing: 2, completed: 3, issue: 4 };
     return statusOrder[a.status] - statusOrder[b.status];
   });
@@ -199,6 +207,19 @@ export function TaskTracking({ events, onBack, onEventSelect }: TaskTrackingProp
                         </Badge>
                       </div>
                       <p className="text-sm text-gray-600 mb-1">{task.description}</p>
+                      {task.browserUseUrl && (
+                        <div className="mb-2">
+                          <a
+                            href={task.browserUseUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-blue-600 hover:text-blue-800 underline flex items-center gap-1"
+                            onClick={(e) => e.stopPropagation()} // Prevent card click
+                          >
+                            🔗 View browser automation session
+                          </a>
+                        </div>
+                      )}
                       <div className="flex items-center gap-4 text-xs text-gray-500">
                         <span className="px-2 py-1 bg-gray-100 rounded">
                           {task.eventTitle}

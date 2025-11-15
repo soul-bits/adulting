@@ -46,30 +46,66 @@ export async function searchAmazonAndAddToCart(
       task: taskDescription,
     });
 
+    // Log task object structure for debugging
+    console.log('[Browser Actions] Task object:', JSON.stringify(task, null, 2));
+    console.log('[Browser Actions] Task object keys:', task && typeof task === 'object' ? Object.keys(task) : 'Not an object');
+
     // Get browser-use session URL if available (for viewing the automation in progress)
     let browserUseUrl: string | undefined;
     try {
-      // Check if task has a URL property (browser-use SDK may provide this)
-      if (task && typeof task === 'object' && 'url' in task) {
-        browserUseUrl = (task as any).url;
-      } else if (task && typeof task === 'object' && 'sessionUrl' in task) {
-        browserUseUrl = (task as any).sessionUrl;
-      } else if (task && typeof task === 'object' && 'id' in task) {
-        // Construct URL from task ID if we know the browser-use dashboard URL
-        const taskId = (task as any).id;
-        if (taskId) {
-          // Browser-use typically provides a dashboard URL - adjust this based on your browser-use setup
-          browserUseUrl = `https://browser-use.com/tasks/${taskId}`;
-        }
+      const taskObj = task as any;
+      
+      // Check various possible properties
+      if (taskObj?.url) {
+        browserUseUrl = taskObj.url;
+        console.log('[Browser Actions] Found URL in task.url');
+      } else if (taskObj?.sessionUrl) {
+        browserUseUrl = taskObj.sessionUrl;
+        console.log('[Browser Actions] Found URL in task.sessionUrl');
+      } else if (taskObj?.session?.url) {
+        browserUseUrl = taskObj.session.url;
+        console.log('[Browser Actions] Found URL in task.session.url');
+      } else if (taskObj?.id) {
+        // Try to construct URL from task ID
+        const taskId = taskObj.id;
+        // Check if there's a base URL in environment
+        const baseUrl = process.env.BROWSER_USE_BASE_URL || 'https://browser-use.com';
+        browserUseUrl = `${baseUrl}/tasks/${taskId}`;
+        console.log('[Browser Actions] Constructed URL from task ID:', browserUseUrl);
+      } else if (taskObj?.taskId) {
+        const taskId = taskObj.taskId;
+        const baseUrl = process.env.BROWSER_USE_BASE_URL || 'https://browser-use.com';
+        browserUseUrl = `${baseUrl}/tasks/${taskId}`;
+        console.log('[Browser Actions] Constructed URL from task.taskId:', browserUseUrl);
       }
     } catch (e) {
-      console.log('[Browser Actions] Could not extract browser-use URL:', e);
+      console.error('[Browser Actions] Error extracting browser-use URL:', e);
     }
 
     console.log(`[Browser Actions] Browser-use session URL: ${browserUseUrl || 'Not available'}`);
 
     // Wait for task to complete
     const result = await task.complete();
+    
+    // Check result object for URL as well
+    if (!browserUseUrl && result) {
+      try {
+        const resultObj = result as any;
+        if (resultObj?.url) {
+          browserUseUrl = resultObj.url;
+          console.log('[Browser Actions] Found URL in result.url');
+        } else if (resultObj?.sessionUrl) {
+          browserUseUrl = resultObj.sessionUrl;
+          console.log('[Browser Actions] Found URL in result.sessionUrl');
+        } else if (resultObj?.session?.url) {
+          browserUseUrl = resultObj.session.url;
+          console.log('[Browser Actions] Found URL in result.session.url');
+        }
+        console.log('[Browser Actions] Result object keys:', Object.keys(resultObj || {}));
+      } catch (e) {
+        console.error('[Browser Actions] Error checking result for URL:', e);
+      }
+    }
 
     // Extract cart URL from result
     const cartUrl = extractCartUrl(result.output || '');

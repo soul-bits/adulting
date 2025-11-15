@@ -76,7 +76,84 @@
       ],
       "processedAt": "2025-11-15T22:01:49.397Z",
       "lastUpdated": "2025-11-15T22:01:58.186Z"
+    },
+    "331nbddr9lbou6j4a9j9u18fmh": {
+      "eventId": "331nbddr9lbou6j4a9j9u18fmh",
+      "eventTitle": "7 year old niece birthday for 7 kids",
+      "planningStatus": "completed",
+      "planningTasks": [
+        {
+          "id": "task-1763244933912-0",
+          "eventId": "331nbddr9lbou6j4a9j9u18fmh",
+          "category": "shopping",
+          "title": "Order cake",
+          "description": "Purchase or order: Order cake",
+          "status": "suggested",
+          "needsApproval": true,
+          "suggestions": []
+        },
+        {
+          "id": "task-1763244933912-1",
+          "eventId": "331nbddr9lbou6j4a9j9u18fmh",
+          "category": "booking",
+          "title": "Book venue",
+          "description": "Book or reserve: Book venue",
+          "status": "suggested",
+          "needsApproval": true,
+          "suggestions": []
+        },
+        {
+          "id": "task-1763244933912-2",
+          "eventId": "331nbddr9lbou6j4a9j9u18fmh",
+          "category": "communication",
+          "title": "Send invitations",
+          "description": "Send communications: Send invitations",
+          "status": "suggested",
+          "needsApproval": false,
+          "suggestions": []
+        },
+        {
+          "id": "task-1763244933912-3",
+          "eventId": "331nbddr9lbou6j4a9j9u18fmh",
+          "category": "preparation",
+          "title": "Plan activities/games",
+          "description": "Plan activities/games",
+          "status": "suggested",
+          "needsApproval": false,
+          "suggestions": []
+        },
+        {
+          "id": "task-1763244933912-4",
+          "eventId": "331nbddr9lbou6j4a9j9u18fmh",
+          "category": "preparation",
+          "title": "Organize party favors",
+          "description": "Organize party favors",
+          "status": "suggested",
+          "needsApproval": false,
+          "suggestions": []
+        },
+        {
+          "id": "task-birthday-cake-1763244933912",
+          "eventId": "331nbddr9lbou6j4a9j9u18fmh",
+          "category": "shopping",
+          "title": "Order Birthday Cake",
+          "description": "Order a birthday cake for unknown guests",
+          "status": "suggested",
+          "needsApproval": true
+        },
+        {
+          "id": "task-birthday-invites-1763244933912",
+          "eventId": "331nbddr9lbou6j4a9j9u18fmh",
+          "category": "communication",
+          "title": "Send Birthday Invitations",
+          "description": "Send invitations to unknown guests with RSVP form",
+          "status": "suggested",
+          "needsApproval": true
+        }
+      ],
+      "processedAt": "2025-11-15T22:15:27.261Z",
+      "lastUpdated": "2025-11-15T22:15:33.912Z"
     }
   },
-  "lastUpdated": "2025-11-15T22:01:58.186Z"
+  "lastUpdated": "2025-11-15T22:15:33.912Z"
 }

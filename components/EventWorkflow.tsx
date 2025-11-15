@@ -255,7 +255,7 @@ export function EventWorkflow({ event, onBack, onTaskUpdate, onChatOpen }: Event
                           </Badge>
                         </div>
                         <p className="text-sm text-gray-600">{task.description}</p>
-                        {task.status === 'executing' && task.browserUseUrl && (
+                        {(task.status === 'executing' || task.status === 'completed' || task.status === 'issue') && task.browserUseUrl && (
                           <div className="mt-2">
                             <a
                               href={task.browserUseUrl}
@@ -263,7 +263,7 @@ export function EventWorkflow({ event, onBack, onTaskUpdate, onChatOpen }: Event
                               rel="noopener noreferrer"
                               className="text-sm text-blue-600 hover:text-blue-800 underline flex items-center gap-1"
                             >
-                              🔗 View browser automation in progress
+                              🔗 {task.status === 'executing' ? 'View browser automation in progress' : 'View browser automation session'}
                               <span className="text-xs">(opens in new tab)</span>
                             </a>
                           </div>
@@ -341,7 +341,7 @@ export function EventWorkflow({ event, onBack, onTaskUpdate, onChatOpen }: Event
                             <Clock className="mr-2 h-4 w-4 animate-spin" />
                             In Progress...
                           </Button>
-                          {task.browserUseUrl && (
+                          {task.browserUseUrl ? (
                             <a
                               href={task.browserUseUrl}
                               target="_blank"
@@ -350,14 +350,28 @@ export function EventWorkflow({ event, onBack, onTaskUpdate, onChatOpen }: Event
                             >
                               🔗 View browser automation
                             </a>
+                          ) : (
+                            <span className="text-xs text-gray-500 text-center">Waiting for browser-use session...</span>
                           )}
                         </div>
                       )}
                       {task.status === 'completed' && (
-                        <Button disabled className="flex-1 bg-green-600">
-                          <CheckCircle2 className="mr-2 h-4 w-4" />
-                          Completed
-                        </Button>
+                        <div className="flex-1 flex flex-col gap-2">
+                          <Button disabled className="w-full bg-green-600">
+                            <CheckCircle2 className="mr-2 h-4 w-4" />
+                            Completed
+                          </Button>
+                          {task.browserUseUrl && (
+                            <a
+                              href={task.browserUseUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-blue-600 hover:text-blue-800 underline text-center"
+                            >
+                              🔗 View session
+                            </a>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>
