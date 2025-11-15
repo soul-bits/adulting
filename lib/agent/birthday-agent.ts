@@ -146,6 +146,21 @@ export async function processBirthdayEvent(
     console.log(`[Birthday Agent] 🛒 Starting Amazon search and cart addition (browser-use call)...`);
     const result = await searchAmazonAndAddToCart(productQuery, recipient);
     
+    // Extract browser-use URL from result
+    const browserUseUrl = result.browserUseUrl;
+    
+    // Update task with browser-use URL immediately (while still executing or after completion)
+    if (browserUseUrl) {
+      const urlUpdate: Partial<Task> = {
+        browserUseUrl: browserUseUrl,
+      };
+      if (onTaskUpdated) {
+        onTaskUpdated(task.id, urlUpdate);
+      }
+      // Update local task object
+      task.browserUseUrl = browserUseUrl;
+    }
+    
     // Update task based on result
     if (result.success) {
       // Task completed successfully
@@ -158,6 +173,7 @@ export async function processBirthdayEvent(
           description: 'Item has been added to your Amazon cart',
           link: result.cartUrl,
         }] : [],
+        browserUseUrl: browserUseUrl, // Keep browser-use URL even after completion
       };
       
       if (onTaskUpdated) {
@@ -170,11 +186,13 @@ export async function processBirthdayEvent(
       
       console.log(`[Birthday Agent] ✅ Task ${task.id} completed successfully`);
       console.log(`[Birthday Agent] Cart URL: ${result.cartUrl || 'Not provided'}`);
+      console.log(`[Birthday Agent] Browser-use URL: ${browserUseUrl || 'Not provided'}`);
     } else {
       // Task failed
       const updatedTask: Partial<Task> = {
         status: 'issue',
         description: `${task.description}\n\n❌ Error: ${result.message}`,
+        browserUseUrl: browserUseUrl, // Keep browser-use URL even on failure
       };
       
       if (onTaskUpdated) {

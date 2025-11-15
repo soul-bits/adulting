@@ -32,6 +32,7 @@ export type Task = {
   status: 'suggested' | 'approved' | 'executing' | 'completed' | 'issue';
   suggestions?: Suggestion[];
   needsApproval: boolean;
+  browserUseUrl?: string; // URL to view browser-use automation session
 };
 
 /**

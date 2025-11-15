@@ -32,7 +32,7 @@ function getBrowserUseClient(): BrowserUseClient {
 export async function searchAmazonAndAddToCart(
   productQuery: string,
   recipient: string
-): Promise<{ success: boolean; cartUrl?: string; message: string }> {
+): Promise<{ success: boolean; cartUrl?: string; browserUseUrl?: string; message: string }> {
   const client = getBrowserUseClient();
   
   try {
@@ -45,6 +45,28 @@ export async function searchAmazonAndAddToCart(
     const task = await client.tasks.createTask({
       task: taskDescription,
     });
+
+    // Get browser-use session URL if available (for viewing the automation in progress)
+    let browserUseUrl: string | undefined;
+    try {
+      // Check if task has a URL property (browser-use SDK may provide this)
+      if (task && typeof task === 'object' && 'url' in task) {
+        browserUseUrl = (task as any).url;
+      } else if (task && typeof task === 'object' && 'sessionUrl' in task) {
+        browserUseUrl = (task as any).sessionUrl;
+      } else if (task && typeof task === 'object' && 'id' in task) {
+        // Construct URL from task ID if we know the browser-use dashboard URL
+        const taskId = (task as any).id;
+        if (taskId) {
+          // Browser-use typically provides a dashboard URL - adjust this based on your browser-use setup
+          browserUseUrl = `https://browser-use.com/tasks/${taskId}`;
+        }
+      }
+    } catch (e) {
+      console.log('[Browser Actions] Could not extract browser-use URL:', e);
+    }
+
+    console.log(`[Browser Actions] Browser-use session URL: ${browserUseUrl || 'Not available'}`);
 
     // Wait for task to complete
     const result = await task.complete();
@@ -59,6 +81,7 @@ export async function searchAmazonAndAddToCart(
     return {
       success: true,
       cartUrl: cartUrl,
+      browserUseUrl: browserUseUrl,
       message: cartUrl 
         ? `Successfully added ${productQuery} to Amazon cart. Cart URL: ${cartUrl}`
         : `Successfully added ${productQuery} to Amazon cart.`,

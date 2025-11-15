@@ -255,6 +255,19 @@ export function EventWorkflow({ event, onBack, onTaskUpdate, onChatOpen }: Event
                           </Badge>
                         </div>
                         <p className="text-sm text-gray-600">{task.description}</p>
+                        {task.status === 'executing' && task.browserUseUrl && (
+                          <div className="mt-2">
+                            <a
+                              href={task.browserUseUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm text-blue-600 hover:text-blue-800 underline flex items-center gap-1"
+                            >
+                              🔗 View browser automation in progress
+                              <span className="text-xs">(opens in new tab)</span>
+                            </a>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -323,10 +336,22 @@ export function EventWorkflow({ event, onBack, onTaskUpdate, onChatOpen }: Event
                         </Button>
                       )}
                       {task.status === 'executing' && (
-                        <Button disabled className="flex-1">
-                          <Clock className="mr-2 h-4 w-4 animate-spin" />
-                          In Progress...
-                        </Button>
+                        <div className="flex-1 flex flex-col gap-2">
+                          <Button disabled className="w-full">
+                            <Clock className="mr-2 h-4 w-4 animate-spin" />
+                            In Progress...
+                          </Button>
+                          {task.browserUseUrl && (
+                            <a
+                              href={task.browserUseUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-blue-600 hover:text-blue-800 underline text-center"
+                            >
+                              🔗 View browser automation
+                            </a>
+                          )}
+                        </div>
                       )}
                       {task.status === 'completed' && (
                         <Button disabled className="flex-1 bg-green-600">
