@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, MapPin, Users, Calendar, Sparkles, ShoppingCart, Mail, Package, CheckCircle2, Clock, AlertCircle, Loader2, Search, Send } from 'lucide-react';
+import { ArrowLeft, MapPin, Users, Calendar, Sparkles, ShoppingCart, Mail, Package, CheckCircle2, Clock, AlertCircle, Loader2, Search, Send, Phone } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
@@ -23,6 +23,7 @@ export function EventWorkflow({ event, onBack, onTaskUpdate, onChatOpen }: Event
   const [taskSuggestions, setTaskSuggestions] = useState<Record<string, Task['suggestions']>>({});
   const [taskBrowserUseUrls, setTaskBrowserUseUrls] = useState<Record<string, string>>({});
   const autoFetchInitiatedRef = useRef<Set<string>>(new Set());
+  const [selectedEmails, setSelectedEmails] = useState<Record<string, Set<string>>>({});
 
   const handleGetRecommendations = async (task: Task) => {
     // Prevent duplicate calls
@@ -374,39 +375,43 @@ export function EventWorkflow({ event, onBack, onTaskUpdate, onChatOpen }: Event
                     </div>
 
                     {/* Email Sent Details for Send Invitations Task */}
-                    {task.status === 'completed' && task.title.toLowerCase().includes('send invitations') && (
-                      <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
-                        <div className="flex items-start gap-3">
-                          <div className="p-2 bg-green-100 rounded-full">
-                            <Send className="h-5 w-5 text-green-600" />
-                          </div>
-                          <div className="flex-1">
-                            <h4 className="font-medium text-green-900 mb-2">✅ Invitations Sent Successfully</h4>
-                            <div className="space-y-2 text-sm">
-                              <div className="flex items-center gap-2 text-green-700">
-                                <Mail className="h-4 w-4" />
-                                <span className="font-medium">7 emails sent</span>
-                              </div>
-                              <div className="mt-3 p-3 bg-white rounded border border-green-200">
-                                <p className="text-xs text-gray-500 mb-2">Recipients:</p>
-                                <div className="grid grid-cols-2 gap-1 text-xs text-gray-700">
-                                  <div>• sarah.johnson@email.com</div>
-                                  <div>• tom.martinez@email.com</div>
-                                  <div>• emma.wilson@email.com</div>
-                                  <div>• michael.brown@email.com</div>
-                                  <div>• lisa.davis@email.com</div>
-                                  <div>• james.taylor@email.com</div>
-                                  <div>• amy.anderson@email.com</div>
+                    {task.status === 'completed' && task.title.toLowerCase().includes('send invitations') && (() => {
+                      const taskEmailKey = `${task.id}-emails`;
+                      const sentEmails = selectedEmails[taskEmailKey] || new Set(['guptaachin01@gmail.com', 'foo@gmail.com']);
+                      const emailArray = Array.from(sentEmails);
+                      
+                      return (
+                        <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+                          <div className="flex items-start gap-3">
+                            <div className="p-2 bg-green-100 rounded-full">
+                              <Send className="h-5 w-5 text-green-600" />
+                            </div>
+                            <div className="flex-1">
+                              <h4 className="font-medium text-green-900 mb-2">✅ Emails Sent Successfully</h4>
+                              <div className="space-y-2 text-sm">
+                                <div className="flex items-center gap-2 text-green-700">
+                                  <Mail className="h-4 w-4" />
+                                  <span className="font-medium">{emailArray.length} email(s) sent</span>
                                 </div>
+                                <div className="mt-3 p-3 bg-white rounded border border-green-200">
+                                  <p className="text-xs text-gray-500 mb-2">Recipients:</p>
+                                  <div className="space-y-1">
+                                    {emailArray.map((email) => (
+                                      <div key={email} className="text-sm text-gray-700">
+                                        • {email}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                                <p className="text-xs text-green-600 mt-2">
+                                  All invitation emails include event details, RSVP link, and calendar attachment.
+                                </p>
                               </div>
-                              <p className="text-xs text-green-600 mt-2">
-                                All invitations include event details, RSVP link, and calendar attachment.
-                              </p>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    )}
+                      );
+                    })()}
 
                     {/* Recommendations */}
                     {(taskSuggestions[task.id] || task.suggestions) && (taskSuggestions[task.id] || task.suggestions)!.length > 0 && (
@@ -452,35 +457,159 @@ export function EventWorkflow({ event, onBack, onTaskUpdate, onChatOpen }: Event
                       </div>
                     )}
 
+                    {/* Email Recipients List for Send Invitations Task */}
+                    {task.status === 'suggested' && task.title.toLowerCase().includes('send invitations') && (() => {
+                      const emailList = ['guptaachin01@gmail.com', 'foo@gmail.com'];
+                      const taskEmailKey = `${task.id}-emails`;
+                      const selectedSet = selectedEmails[taskEmailKey] || new Set();
+                      
+                      const toggleEmail = (email: string) => {
+                        setSelectedEmails(prev => {
+                          const newSet = new Set(prev[taskEmailKey] || []);
+                          if (newSet.has(email)) {
+                            newSet.delete(email);
+                          } else {
+                            newSet.add(email);
+                          }
+                          return { ...prev, [taskEmailKey]: newSet };
+                        });
+                      };
+
+                      const handleSend = () => {
+                        // Mark task as completed when email is sent
+                        onTaskUpdate(event.id, task.id, 'completed');
+                      };
+
+                      return (
+                        <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                          <p className="text-sm font-medium text-gray-700 mb-3">Email Recipients:</p>
+                          <div className="space-y-2 mb-4">
+                            {emailList.map((email) => (
+                              <div key={email} className="flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-lg">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedSet.has(email)}
+                                  onChange={() => toggleEmail(email)}
+                                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                />
+                                <div className="flex items-center gap-2 flex-1">
+                                  <Mail className="h-4 w-4 text-gray-500" />
+                                  <span className="text-sm text-gray-700">{email}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                          <Button
+                            onClick={handleSend}
+                            disabled={selectedSet.size === 0}
+                            className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <Send className="mr-2 h-4 w-4" />
+                            Send Invitations {selectedSet.size > 0 && `(${selectedSet.size})`}
+                          </Button>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Browser Session Message for Order Dress Task */}
+                    {task.status === 'suggested' && task.title.toLowerCase().includes('order dress') && (
+                      <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <Loader2 className="h-5 w-5 text-blue-600 animate-spin" />
+                          <p className="text-sm font-medium text-blue-900">
+                            Browser session to order dress started
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Venue Booking Recommendations for Book Venue Task */}
+                    {task.status === 'suggested' && task.title.toLowerCase().includes('book venue') && (
+                      <div className="mt-4 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                        <p className="text-sm font-medium text-gray-700 mb-3">Venue Recommendations:</p>
+                        <div className="space-y-3 mb-4">
+                          {/* Option 1: Chuck-e-cheese */}
+                          <div className="p-4 bg-white border border-gray-200 rounded-lg">
+                            <div className="flex items-start justify-between mb-2">
+                              <div className="flex-1">
+                                <h4 className="font-medium text-gray-900 mb-2">Chuck-e-cheese</h4>
+                                <div className="space-y-1 text-sm text-gray-600">
+                                  <div className="flex items-center gap-2">
+                                    <Phone className="h-4 w-4 text-gray-500" />
+                                    <span>(555) 123-4567</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <Mail className="h-4 w-4 text-gray-500" />
+                                    <span>info@chuckecheese.com</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Option 2: Dummy venue */}
+                          <div className="p-4 bg-white border border-gray-200 rounded-lg">
+                            <div className="flex items-start justify-between mb-2">
+                              <div className="flex-1">
+                                <h4 className="font-medium text-gray-900 mb-2">Option 2</h4>
+                                <div className="space-y-1 text-sm text-gray-600">
+                                  <div className="flex items-center gap-2">
+                                    <Mail className="h-4 w-4 text-gray-500" />
+                                    <span>venue@example.com</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        <Button
+                          onClick={() => {
+                            // Place a call - in a real app, this would initiate a phone call
+                            window.location.href = 'tel:+15551234567';
+                          }}
+                          className="w-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white"
+                        >
+                          <Phone className="mr-2 h-4 w-4" />
+                          Place a Call
+                        </Button>
+                      </div>
+                    )}
+
                     {/* Actions */}
                     <div className="flex gap-2 mt-4">
                       {task.status === 'suggested' && (
                         <>
-                          <Button
-                            variant="outline"
-                            onClick={() => handleGetRecommendations(task)}
-                            disabled={loadingRecommendations[task.id]}
-                            className="flex-1"
-                          >
-                            {loadingRecommendations[task.id] ? (
-                              <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Searching...
-                              </>
-                            ) : (
-                              <>
-                                <Search className="mr-2 h-4 w-4" />
-                                Get Recommendations
-                              </>
-                            )}
-                          </Button>
-                          <Button
-                            onClick={() => onTaskUpdate(event.id, task.id, 'approved')}
-                            className="flex-1"
-                          >
-                            <CheckCircle2 className="mr-2 h-4 w-4" />
-                            Approve
-                          </Button>
+                          {!task.title.toLowerCase().includes('send invitations') && 
+                           !task.title.toLowerCase().includes('book venue') && 
+                           !task.title.toLowerCase().includes('order dress') && (
+                            <>
+                              <Button
+                                variant="outline"
+                                onClick={() => handleGetRecommendations(task)}
+                                disabled={loadingRecommendations[task.id]}
+                                className="flex-1"
+                              >
+                                {loadingRecommendations[task.id] ? (
+                                  <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Searching...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Search className="mr-2 h-4 w-4" />
+                                    Get Recommendations
+                                  </>
+                                )}
+                              </Button>
+                              <Button
+                                onClick={() => onTaskUpdate(event.id, task.id, 'approved')}
+                                className="flex-1"
+                              >
+                                <CheckCircle2 className="mr-2 h-4 w-4" />
+                                Approve
+                              </Button>
+                            </>
+                          )}
                         </>
                       )}
                       {task.status === 'approved' && (

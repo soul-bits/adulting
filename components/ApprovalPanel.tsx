@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, CheckCircle2, X, Sparkles, Loader2, Search } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, X, Sparkles, Loader2, Search, Mail, Send, Phone } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
@@ -22,6 +22,7 @@ export function ApprovalPanel({ events, onBack, onTaskUpdate }: ApprovalPanelPro
   const [taskSuggestions, setTaskSuggestions] = useState<Record<string, Task['suggestions']>>({});
   const [taskBrowserUseUrls, setTaskBrowserUseUrls] = useState<Record<string, string>>({});
   const autoFetchInitiatedRef = useRef<Set<string>>(new Set());
+  const [selectedEmails, setSelectedEmails] = useState<Record<string, Set<string>>>({});
   
   const pendingApprovals = events.flatMap(event =>
     event.tasks
@@ -295,49 +296,179 @@ export function ApprovalPanel({ events, onBack, onTaskUpdate }: ApprovalPanelPro
                   </div>
                 )}
 
-                {/* Action Buttons */}
-                <div className="flex gap-3 pt-4 border-t">
-                  <Button
-                    variant="outline"
-                    onClick={() => onTaskUpdate(task.eventId, task.id, 'issue')}
-                    className="flex-1 border-red-300 text-red-700 hover:bg-red-50"
-                  >
-                    <X className="mr-2 h-4 w-4" />
-                    Reject
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => handleGetRecommendations(task)}
-                    disabled={loadingRecommendations[task.id]}
-                    className="flex-1"
-                  >
-                    {loadingRecommendations[task.id] ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Searching...
-                      </>
-                    ) : (
-                      <>
-                        <Search className="mr-2 h-4 w-4" />
-                        Get Recommendations
-                      </>
-                    )}
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      // If this is a dress ordering task with browser-use URL, open it
-                      if (task.id.startsWith('task-birthday-dress-') && task.browserUseUrl) {
-                        window.open(task.browserUseUrl, '_blank', 'noopener,noreferrer');
+                {/* Email Recipients List for Send Invitations Task */}
+                {task.title.toLowerCase().includes('send invitations') ? (() => {
+                  const emailList = ['guptaachin01@gmail.com', 'foo@gmail.com'];
+                  const taskEmailKey = `${task.id}-emails`;
+                  const selectedSet = selectedEmails[taskEmailKey] || new Set();
+                  
+                  const toggleEmail = (email: string) => {
+                    setSelectedEmails(prev => {
+                      const newSet = new Set(prev[taskEmailKey] || []);
+                      if (newSet.has(email)) {
+                        newSet.delete(email);
+                      } else {
+                        newSet.add(email);
                       }
-                      // Update task status to approved
-                      onTaskUpdate(task.eventId, task.id, 'approved');
-                    }}
-                    className="flex-1 bg-green-600 hover:bg-green-700"
-                  >
-                    <CheckCircle2 className="mr-2 h-4 w-4" />
-                    {task.id.startsWith('task-birthday-dress-') && task.browserUseUrl ? 'Approve & View Session' : 'Approve'}
-                  </Button>
-                </div>
+                      return { ...prev, [taskEmailKey]: newSet };
+                    });
+                  };
+
+                  const handleSend = () => {
+                    // Mark task as completed when email is sent
+                    onTaskUpdate(task.eventId, task.id, 'completed');
+                  };
+
+                  return (
+                    <div className="pt-4 border-t">
+                      <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                        <p className="text-sm font-medium text-gray-700 mb-3">Email Recipients:</p>
+                        <div className="space-y-2 mb-4">
+                          {emailList.map((email) => (
+                            <div key={email} className="flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-lg">
+                              <input
+                                type="checkbox"
+                                checked={selectedSet.has(email)}
+                                onChange={() => toggleEmail(email)}
+                                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                              />
+                              <div className="flex items-center gap-2 flex-1">
+                                <Mail className="h-4 w-4 text-gray-500" />
+                                <span className="text-sm text-gray-700">{email}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <Button
+                          onClick={handleSend}
+                          disabled={selectedSet.size === 0}
+                          className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <Send className="mr-2 h-4 w-4" />
+                          Send Invitations {selectedSet.size > 0 && `(${selectedSet.size})`}
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })() : task.title.toLowerCase().includes('order dress') ? (
+                  <div className="pt-4 border-t">
+                    <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <Loader2 className="h-5 w-5 text-blue-600 animate-spin" />
+                        <p className="text-sm font-medium text-blue-900">
+                          Browser session to order dress started
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ) : task.title.toLowerCase().includes('book venue') ? (
+                  <div className="pt-4 border-t">
+                    <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                      <p className="text-sm font-medium text-gray-700 mb-3">Venue Recommendations:</p>
+                      <div className="space-y-3 mb-4">
+                        {/* Option 1: Chuck-e-cheese */}
+                        <div className="p-4 bg-white border border-gray-200 rounded-lg">
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="flex-1">
+                              <h4 className="font-medium text-gray-900 mb-2">Chuck-e-cheese</h4>
+                              <div className="space-y-1 text-sm text-gray-600">
+                                <div className="flex items-center gap-2">
+                                  <Phone className="h-4 w-4 text-gray-500" />
+                                  <span>(555) 123-4567</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Mail className="h-4 w-4 text-gray-500" />
+                                  <span>info@chuckecheese.com</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Option 2: Dummy venue */}
+                        <div className="p-4 bg-white border border-gray-200 rounded-lg">
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="flex-1">
+                              <h4 className="font-medium text-gray-900 mb-2">Option 2</h4>
+                              <div className="space-y-1 text-sm text-gray-600">
+                                <div className="flex items-center gap-2">
+                                  <Mail className="h-4 w-4 text-gray-500" />
+                                  <span>venue@example.com</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <Button
+                        onClick={() => {
+                          // Place a call - in a real app, this would initiate a phone call
+                          window.location.href = 'tel:+15551234567';
+                        }}
+                        className="w-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white mb-4"
+                      >
+                        <Phone className="mr-2 h-4 w-4" />
+                        Place a Call
+                      </Button>
+                      <div className="flex gap-3">
+                        <Button
+                          variant="outline"
+                          onClick={() => onTaskUpdate(task.eventId, task.id, 'issue')}
+                          className="flex-1 border-red-300 text-red-700 hover:bg-red-50"
+                        >
+                          <X className="mr-2 h-4 w-4" />
+                          Reject
+                        </Button>
+                        <Button
+                          onClick={() => onTaskUpdate(task.eventId, task.id, 'approved')}
+                          className="flex-1 bg-green-600 hover:bg-green-700"
+                        >
+                          <CheckCircle2 className="mr-2 h-4 w-4" />
+                          Approve
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex gap-3 pt-4 border-t">
+                    <Button
+                      variant="outline"
+                      onClick={() => onTaskUpdate(task.eventId, task.id, 'issue')}
+                      className="flex-1 border-red-300 text-red-700 hover:bg-red-50"
+                    >
+                      <X className="mr-2 h-4 w-4" />
+                      Reject
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => handleGetRecommendations(task)}
+                      disabled={loadingRecommendations[task.id]}
+                      className="flex-1"
+                    >
+                      {loadingRecommendations[task.id] ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Searching...
+                        </>
+                      ) : (
+                        <>
+                          <Search className="mr-2 h-4 w-4" />
+                          Get Recommendations
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        // Update task status to approved
+                        onTaskUpdate(task.eventId, task.id, 'approved');
+                      }}
+                      className="flex-1 bg-green-600 hover:bg-green-700"
+                    >
+                      <CheckCircle2 className="mr-2 h-4 w-4" />
+                      Approve
+                    </Button>
+                  </div>
+                )}
               </Card>
             ))}
           </div>

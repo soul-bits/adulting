@@ -243,9 +243,9 @@ export function TaskTracking({ events, onBack, onEventSelect }: TaskTrackingProp
                       <div className="flex items-start gap-2">
                         <Send className="h-4 w-4 text-green-600 mt-0.5" />
                         <div className="flex-1">
-                          <p className="text-sm font-medium text-green-900 mb-1">✅ 7 invitations sent</p>
+                          <p className="text-sm font-medium text-green-900 mb-1">✅ Emails sent</p>
                           <div className="text-xs text-gray-600 space-y-1">
-                            <p>Recipients: sarah.johnson@email.com, tom.martinez@email.com, emma.wilson@email.com, michael.brown@email.com, lisa.davis@email.com, james.taylor@email.com, amy.anderson@email.com</p>
+                            <p>Sent to: guptaachin01@gmail.com, foo@gmail.com</p>
                             <p className="text-green-600">All emails include event details and RSVP link.</p>
                           </div>
                         </div>
