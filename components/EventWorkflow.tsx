@@ -460,7 +460,7 @@ export function EventWorkflow({ event, onBack, onTaskUpdate, onChatOpen }: Event
 
                     {/* Email Recipients List for Send Invitations Task */}
                     {task.status === 'suggested' && task.title.toLowerCase().includes('send invitations') && (() => {
-                      const emailList = ['guptaachin01@gmail.com', 'foo@gmail.com'];
+                      const emailList = ['6w4hdneojd@pomail.net', 'foo@gmail.com'];
                       const taskEmailKey = `${task.id}-emails`;
                       const selectedSet = selectedEmails[taskEmailKey] || new Set();
                       
