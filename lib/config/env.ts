@@ -32,7 +32,12 @@ export const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 export const GOOGLE_REDIRECT_URI = getEnv('GOOGLE_REDIRECT_URI', 'http://localhost:3000/api/auth/callback');
 
 // VAPI Configuration (for phone calls)
+// Support both legacy VAPI_API_KEY and newer VAPI_PRIVATE_API_KEY
 export const VAPI_API_KEY = process.env.VAPI_API_KEY;
+export const VAPI_PRIVATE_API_KEY = process.env.VAPI_PRIVATE_API_KEY;
+export const VAPI_ASSISTANT_ID = process.env.VAPI_ASSISTANT_ID;
+export const VAPI_PHONE_NUMBER_ID = process.env.VAPI_PHONE_NUMBER_ID;
+export const VAPI_RESTAURANT_NUMBER = process.env.VAPI_RESTAURANT_NUMBER;
 
 // Gmail Configuration
 export const GMAIL_REFRESH_TOKEN = process.env.GMAIL_REFRESH_TOKEN;
@@ -93,7 +98,11 @@ export const env = {
     webhookUrl: WEBHOOK_URL,
   },
   vapi: {
-    apiKey: VAPI_API_KEY,
+    // Prefer the private key if set, otherwise fall back to legacy key
+    apiKey: VAPI_PRIVATE_API_KEY || VAPI_API_KEY,
+    assistantId: VAPI_ASSISTANT_ID,
+    phoneNumberId: VAPI_PHONE_NUMBER_ID,
+    restaurantNumber: VAPI_RESTAURANT_NUMBER,
   },
   gmail: {
     refreshToken: GMAIL_REFRESH_TOKEN,

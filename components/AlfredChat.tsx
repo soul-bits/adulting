@@ -220,7 +220,7 @@ export function AlfredChat({ onClose }: AlfredChatProps) {
   };
 
   const quickPrompts = [
-    "Plan my 5 year old niece's birthday party next Saturday",
+    "Plan my niece's 5th birthday party next Saturday for 3 adults and 7 kids",
     "Book a restaurant for anniversary",
     "Help me prepare for team meeting",
     "Find a gift for my partner"
@@ -433,10 +433,10 @@ export function AlfredChat({ onClose }: AlfredChatProps) {
         const eventDate = new Date(extractedDateTime.date);
         const [startHours, startMinutes] = selectedTime.startTime.split(':');
         const [endHours, endMinutes] = selectedTime.endTime.split(':');
-        
+
         eventDate.setHours(parseInt(startHours), parseInt(startMinutes), 0, 0);
         const startDateTime = eventDate.toISOString();
-        
+
         eventDate.setHours(parseInt(endHours), parseInt(endMinutes), 0, 0);
         const endDateTime = eventDate.toISOString();
 
@@ -482,12 +482,97 @@ export function AlfredChat({ onClose }: AlfredChatProps) {
 
         const calendarData = await calendarResponse.json();
         console.log('Calendar event created:', calendarData);
+
+        // Step 3: Initiate Vapi phone call to make reservation
+        if (selectedVenue?.phone || proposals.preferences?.numberOfGuests) {
+          // Format date for Vapi (YYYY-MM-DD)
+          const reservationDate = new Date(extractedDateTime.date).toISOString().split('T')[0];
+
+          // Format time for Vapi (e.g., "7:30 PM")
+          const reservationTime = formatTime(selectedTime.startTime);
+
+          // Extract number of guests from preferences
+          const numberOfGuests = proposals.preferences?.numberOfGuests
+            ? parseInt(proposals.preferences.numberOfGuests.replace(/\D/g, '')) || 2
+            : 2;
+
+          // Show UI feedback that we're initiating the call
+          const initiatingMessage: Message = {
+            id: (Date.now() + 1).toString(),
+            sender: 'alfred',
+            text: `📞 Initiating reservation call to ${selectedVenue?.name || 'the restaurant'}...`,
+            timestamp: new Date()
+          };
+          setMessages(prev => [...prev, initiatingMessage]);
+
+          try {
+            console.log('[AlfredChat] Initiating Vapi reservation call...');
+            console.log('[AlfredChat] Restaurant:', selectedVenue?.phone);
+            console.log('[AlfredChat] Date:', reservationDate);
+            console.log('[AlfredChat] Time:', reservationTime);
+            console.log('[AlfredChat] Guests:', numberOfGuests);
+
+            const vapiResponse = await fetch('/api/call/reserve', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                date: reservationDate,
+                time: reservationTime,
+                people: numberOfGuests,
+                restaurantPhone: selectedVenue?.phone, // Use venue phone if available
+                venueName: selectedVenue?.name,
+              }),
+            });
+
+            if (vapiResponse.ok) {
+              const vapiData = await vapiResponse.json();
+              console.log('[AlfredChat] ✅ Vapi call initiated:', vapiData);
+
+              // Replace initiating message with success message
+              setMessages(prev => prev.map(msg =>
+                msg.id === initiatingMessage.id
+                  ? {
+                      ...msg,
+                      text: `✅ Call initiated successfully! I've called ${selectedVenue?.name || 'the restaurant'} to make your reservation for ${numberOfGuests} people on ${reservationDate} at ${reservationTime}. Call ID: ${vapiData.callId || 'N/A'}`,
+                    }
+                  : msg
+              ));
+            } else {
+              const errorData = await vapiResponse.json();
+              console.error('[AlfredChat] Error initiating Vapi call:', errorData);
+
+              // Replace initiating message with error message
+              setMessages(prev => prev.map(msg =>
+                msg.id === initiatingMessage.id
+                  ? {
+                      ...msg,
+                      text: `⚠️ Could not initiate call: ${errorData.message || errorData.error || 'Unknown error'}. The calendar event was created successfully.`,
+                    }
+                  : msg
+              ));
+            }
+          } catch (error) {
+            console.error('[AlfredChat] Error initiating Vapi call:', error);
+
+            // Replace initiating message with error message
+            setMessages(prev => prev.map(msg =>
+              msg.id === initiatingMessage.id
+                ? {
+                    ...msg,
+                    text: `⚠️ Error initiating call: ${error instanceof Error ? error.message : 'Unknown error'}. The calendar event was created successfully.`,
+                  }
+                : msg
+            ));
+          }
+        }
       } catch (error) {
         console.error('Error creating calendar event:', error);
         throw error; // Re-throw to show error to user
       }
 
-      // Step 3: Close the chat
+      // Step 4: Close the chat
       setIsTyping(false);
       onClose();
     } catch (error) {
@@ -501,6 +586,76 @@ export function AlfredChat({ onClose }: AlfredChatProps) {
         timestamp: new Date()
       };
       setMessages(prev => [...prev, errorMessage]);
+    }
+  };
+
+  // Simple test call using mocked data (no calendar event)
+  const handleTestCall = async () => {
+    const testDate = new Date();
+    const isoDate = testDate.toISOString().split('T')[0]; // YYYY-MM-DD
+    const testTime = '7:00 PM';
+    const testPeople = 2;
+
+    const initiatingMessage: Message = {
+      id: (Date.now() + 1).toString(),
+      sender: 'alfred',
+      text: `📞 Initiating TEST reservation call for ${testPeople} people on ${isoDate} at ${testTime}...`,
+      timestamp: new Date()
+    };
+    setMessages(prev => [...prev, initiatingMessage]);
+
+    try {
+      console.log('[AlfredChat] Initiating TEST Vapi call...');
+
+      // We intentionally omit restaurantPhone so the backend can use VAPI_TARGET_PHONE_NUMBER / env fallback
+      const response = await fetch('/api/call/reserve', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          date: isoDate,
+          time: testTime,
+          people: testPeople,
+          venueName: 'Test Restaurant',
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('[AlfredChat] ✅ TEST Vapi call initiated:', data);
+
+        setMessages(prev => prev.map(msg =>
+          msg.id === initiatingMessage.id
+            ? {
+                ...msg,
+                text: `✅ TEST call initiated successfully! Call ID: ${data.callId || 'N/A'}`,
+              }
+            : msg
+        ));
+      } else {
+        const errorData = await response.json();
+        console.error('[AlfredChat] Error initiating TEST Vapi call:', errorData);
+
+        setMessages(prev => prev.map(msg =>
+          msg.id === initiatingMessage.id
+            ? {
+                ...msg,
+                text: `⚠️ TEST call failed: ${errorData.message || errorData.error || 'Unknown error'}`,
+              }
+            : msg
+        ));
+      }
+    } catch (error) {
+      console.error('[AlfredChat] Error initiating TEST Vapi call:', error);
+      setMessages(prev => prev.map(msg =>
+        msg.id === initiatingMessage.id
+          ? {
+              ...msg,
+              text: `⚠️ TEST call error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            }
+          : msg
+      ));
     }
   };
 
@@ -771,7 +926,7 @@ export function AlfredChat({ onClose }: AlfredChatProps) {
             
             {/* Approve Button */}
             {(proposals.hasTimeProposals || proposals.hasVenueProposals) && (
-              <div className="mt-4 pt-4 border-t border-emerald-200">
+              <div className="mt-4 pt-4 border-t border-emerald-200 space-y-3">
                 <Button
                   onClick={handleApproveSelection}
                   disabled={
@@ -784,7 +939,7 @@ export function AlfredChat({ onClose }: AlfredChatProps) {
                   Approve Selection
                 </Button>
                 {!extractedDateTime?.date && (
-                  <p className="text-xs text-gray-500 mt-2 text-center">
+                  <p className="text-xs text-gray-500 text-center">
                     Please wait for date information to be extracted
                   </p>
                 )}
@@ -861,8 +1016,18 @@ export function AlfredChat({ onClose }: AlfredChatProps) {
           </div>
         )}
 
-        {/* Input */}
+        {/* Input + Test Call */}
         <div className="p-4 sm:p-6 border-t bg-white">
+          <div className="flex justify-end mb-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleTestCall}
+              className="hidden text-xs h-8 px-3 border-dashed border-emerald-400 text-emerald-700 hover:bg-emerald-50"
+            >
+              Test Vapi Call (mock data)
+            </Button>
+          </div>
           <div className="flex gap-3 items-end">
             <Button
               variant="outline"
